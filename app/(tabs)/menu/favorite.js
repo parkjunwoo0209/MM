@@ -5,6 +5,8 @@ import { collection, getDocs, deleteDoc, doc, query, where } from "firebase/fire
 import { db } from "../../firebaseConfig";
 import { getAuth } from 'firebase/auth';
 import { useFocusEffect } from '@react-navigation/native';
+import { removeFavoriteFromFirestore } from '../back/favoritesService';
+
 
 export default function BookMark() {
   const router = useRouter();
@@ -46,13 +48,12 @@ export default function BookMark() {
   // 즐겨찾기 삭제
   const handleRemoveItem = async (id) => {
     try {
-      await deleteDoc(doc(db, "favorites", id)); // 문서 ID를 기반으로 삭제
-      setData((prevData) => prevData.filter((item) => item.id !== id)); // 로컬 상태에서 데이터 제거
+      await removeFavoriteFromFirestore(id); // Firestore에서 데이터 삭제
+      setData((prevData) => prevData.filter((item) => item.id !== id)); // 로컬 상태 업데이트
     } catch (error) {
       console.error("즐겨찾기 삭제 중 오류:", error.message);
     }
   };
-
 
   // 각 리스트 항목 렌더링
   const renderItem = ({ item }) => (

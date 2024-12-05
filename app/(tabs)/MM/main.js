@@ -93,6 +93,7 @@ const MainScreen = () => {
               placeholderTextColor="#999"
               keyboardType="default"
               onSubmitEditing={handleSearch}
+              onPress={() => router.push('/MM/searchScreen')}
             />
             <TouchableOpacity
               style={styles.searchButton}

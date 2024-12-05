@@ -60,7 +60,7 @@ const SubwayMap = ({
       setSelectedStations((prev) => {
         const newState = { ...prev, departure: popupPosition.station };
         if (newState.departure && newState.arrival) {
-          router.push('/MM/searchScreen');
+          router.push('/MM/searchResult');
         }
         return newState;
       });
@@ -69,7 +69,7 @@ const SubwayMap = ({
       setSelectedStations((prev) => {
         const newState = { ...prev, arrival: popupPosition.station };
         if (newState.departure && prev.departure) {
-          router.push('/MM/searchScreen');
+          router.push('/MM/searchResult');
         }
         return newState;
       });
