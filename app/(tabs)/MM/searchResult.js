@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Platform, StatusBar } from 'react-native'; // Platform과 StatusBar 임포트
+import { useRouter } from 'expo-router'; // 이 줄 추가
 
 import {
   View,
@@ -30,12 +31,12 @@ const stepBorderColors = {
 const defaultColor = 'transparent';
 
 // PNG 아이콘 파일 import
-const ArrowBackIcon = require('../../assets/images/searchicon/arrow_back.png');
-const ExchangeIcon = require('../../assets/images/searchicon/exchange.png');
-const EmptyStarIcon = require('../../assets/images/searchicon/emptystaricon.png');
-  const StarIcon = require('../../assets/images/searchicon/staricon.png');
-const ClearIcon = require('../../assets/images/searchicon/X.png');
-const ArrowDropDownIcon = require('../../assets/images/searchicon/arrow_drop_down.png');
+const ArrowBackIcon = require('../../../assets/images/searchicon/arrow_back.png');
+const ExchangeIcon = require('../../../assets/images/searchicon/exchange.png');
+const EmptyStarIcon = require('../../../assets/images/searchicon/emptystaricon.png');
+const StarIcon = require('../../../assets/images/searchicon/staricon.png');
+const ClearIcon = require('../../../assets/images/searchicon/X.png');
+const ArrowDropDownIcon = require('../../../assets/images/searchicon/arrow_drop_down.png');
 
 // 목 데이터1
 const initialMockData = [
@@ -54,6 +55,8 @@ const initialMockData = [
 ];
 
 const SearchResult = () => {
+  const router = useRouter(); // 이 줄 추가
+
   // 출발역, 도착역 상태
   const [departureStation, setDepartureStation] = useState('');
   const [arrivalStation, setArrivalStation] = useState('');
@@ -223,7 +226,7 @@ const SearchResult = () => {
           );
         })}
       </View>
-      <TouchableOpacity style={styles.backButton} onPress={router.back}>
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Image
           source={require('../../../assets/images/mainicon/뒤로가기.png')}
           style={styles.backIcon}

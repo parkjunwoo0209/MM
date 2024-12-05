@@ -1,48 +1,75 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, Image, FlatList, StyleSheet, TouchableOpacity } from "react-native";
-import { useRouter } from 'expo-router';
-
-const initialData = [
-  { id: "1", type: "location", label: "121" },
-  { id: "2", type: "location", label: "706" },
-  { id: "3", type: "location", label: "617" },
-  { id: "4", type: "location", label: "215" },
-  { id: "5", type: "subway", label: "601 -> 307" },
-  { id: "6", type: "subway", label: "123 -> 904" },
-];
+import { useRouter } from "expo-router";
+import { collection, getDocs, deleteDoc, doc, query, where } from "firebase/firestore";
+import { db } from "../../firebaseConfig";
+import { getAuth } from 'firebase/auth';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function BookMark() {
   const router = useRouter();
   const [data, setData] = useState([]);
 
-  // 앱 실행 시 초기 데이터 로드
-  useEffect(() => {
-    setData(initialData);
-  }, []);
+  const fetchData = async () => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
 
-  // 항목 삭제 함수
-  const handleRemoveItem = (id) => {
-    console.log("Removing item with id:", id); // 디버깅 로그
-    setData((prevData) => prevData.filter((item) => item.id !== id));
+      if (!user) {
+        console.error("로그인된 사용자가 없습니다.");
+        return;
+      }
+
+      const userId = user.uid;
+      const favoritesCollection = collection(db, "favorites");
+      const q = query(favoritesCollection, where("userId", "==", userId));
+      const querySnapshot = await getDocs(q);
+
+      const favoritesData = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setData(favoritesData);
+    } catch (error) {
+      console.error("즐겨찾기 데이터 로드 중 오류:", error.message);
+    }
   };
+
+  // 컴포넌트가 포커스를 받을 때마다 데이터를 새로 불러옴
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchData();
+    }, [])
+  );
+
+  // 즐겨찾기 삭제
+  const handleRemoveItem = async (id) => {
+    try {
+      await deleteDoc(doc(db, "favorites", id)); // 문서 ID를 기반으로 삭제
+      setData((prevData) => prevData.filter((item) => item.id !== id)); // 로컬 상태에서 데이터 제거
+    } catch (error) {
+      console.error("즐겨찾기 삭제 중 오류:", error.message);
+    }
+  };
+
 
   // 각 리스트 항목 렌더링
   const renderItem = ({ item }) => (
     <View style={styles.itemContainer}>
       {/* 아이콘 */}
       <Image
-        source={
-          item.type === "location"
-            ? require("../../../assets/images/menuicon/location_on.png")
-            : require("../../../assets/images/menuicon/directions_subway.png")
-        }
+        source={require("../../../assets/images/menuicon/location_on.png")}
         style={styles.icon}
       />
       {/* 라벨 */}
-      <Text style={styles.label}>{item.label}</Text>
+      <Text style={styles.label}>{item.station}</Text>
       {/* 즐겨찾기 삭제 버튼 */}
       <TouchableOpacity onPress={() => handleRemoveItem(item.id)} style={{ padding: 10 }}>
-        <Image source={require("../../../assets/images/menuicon/star_filled.png")} style={styles.bookmarkIcon} />
+        <Image
+          source={require("../../../assets/images/menuicon/star_filled.png")}
+          style={styles.bookmarkIcon}
+        />
       </TouchableOpacity>
     </View>
   );
@@ -55,7 +82,7 @@ export default function BookMark() {
       {/* 상단 배너 */}
       <View style={styles.banner}>
         <Image
-          source={require("../../../assets/images/mainicon/즐겨찾기 아이콘.png")} // 즐겨찾기 아이콘
+          source={require("../../../assets/images/mainicon/즐겨찾기 아이콘.png")}
           style={styles.bannerIcon}
         />
         <Text style={styles.bannerText}>즐겨찾기</Text>
@@ -66,12 +93,13 @@ export default function BookMark() {
         data={data}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        ListEmptyComponent={<Text style={styles.emptyText}>즐겨찾기가 없습니다.</Text>}
       />
 
       {/* 왼쪽 하단 뒤로가기 아이콘 */}
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Image
-          source={require("../../../assets/images/mainicon/뒤로가기.png")} // 뒤로가기 아이콘
+          source={require("../../../assets/images/mainicon/뒤로가기.png")}
           style={styles.backIcon}
         />
       </TouchableOpacity>
@@ -141,5 +169,11 @@ const styles = StyleSheet.create({
     width: 40, // 뒤로가기 아이콘 크기
     height: 40,
     tintColor: "#87CEEB", // 아이콘 색상 유지
+  },
+  emptyText: {
+    fontSize: 18,
+    color: "#888",
+    textAlign: "center",
+    marginTop: 20,
   },
 });

@@ -4,6 +4,9 @@ import { ReactNativeZoomableView } from '@openspacelabs/react-native-zoomable-vi
 import { stationCoordinates } from './location';
 import {useRouter} from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { db } from '../../firebaseConfig';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 const SubwayMap = ({ 
   popupPosition, 
@@ -15,8 +18,32 @@ const SubwayMap = ({
   const [selectedStations, setSelectedStations] = useState({ departure: null, arrival: null });
   const router = useRouter();
 
+  // Firestore에서 즐겨찾기 데이터를 가져오는 함수 추가
+  const fetchFavorites = async () => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        console.log("로그인된 사용자가 없습니다.");
+        return;
+      }
+
+      const favoritesCollection = collection(db, "favorites");
+      const q = query(favoritesCollection, where("userId", "==", user.uid));
+      const querySnapshot = await getDocs(q);
+      
+      const favoriteStations = querySnapshot.docs.map(doc => doc.data().station);
+      setFavorites(favoriteStations);
+    } catch (error) {
+      console.error("즐겨찾기 불러오기 실패:", error);
+    }
+  };
+
+  // 컴포넌트가 마운트되거나 포커스될 때 즐겨찾기 데이터 가져오기
   useFocusEffect(
     useCallback(() => {
+      fetchFavorites();
       setSelectedStations({ departure: null, arrival: null });
     }, [])
   );
@@ -66,6 +93,51 @@ const SubwayMap = ({
     }
   };
 
+  const handleFavorite = async (type) => {
+    if (type === "즐겨찾기") {
+      try {
+        const auth = getAuth();
+        const user = auth.currentUser;
+  
+        if (!user) {
+          console.error("로그인된 사용자가 없습니다.");
+          return;
+        }
+  
+        const userId = user.uid;
+        const favoritesCollection = collection(db, "favorites");
+        const station = popupPosition.station;
+  
+        const q = query(
+          favoritesCollection,
+          where("userId", "==", userId),
+          where("station", "==", station)
+        );
+        const querySnapshot = await getDocs(q);
+  
+        if (!querySnapshot.empty) {
+          // 즐겨찾기 제거
+          querySnapshot.forEach(async (docSnapshot) => {
+            await deleteDoc(doc(db, "favorites", docSnapshot.id));
+          });
+          setFavorites(prev => prev.filter(fav => fav !== station));
+          console.log(`${station}이(가) 즐겨찾기에서 제거됨`);
+        } else {
+          // 즐겨찾기 추가
+          await addDoc(favoritesCollection, {
+            station: station,
+            userId: userId,
+          });
+          setFavorites(prev => [...prev, station]);
+          console.log(`${station}이(가) 즐겨찾기에 추가됨`);
+        }
+      } catch (error) {
+        console.error("즐겨찾기 처리 중 오류:", error.message);
+      }
+    }
+    setPopupVisible(false);
+  };
+
   return (
     <TouchableWithoutFeedback onPress={handleOutsidePress}>
       <View style={styles.container}>
@@ -104,13 +176,13 @@ const SubwayMap = ({
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.popupButton}
-        onPress={() => handlePopupOption('즐겨찾기')}
+        onPress={() => handleFavorite('즐겨찾기')}
       >
         <Image
           source={
             favorites.includes(popupPosition.station)
-              ? require('../../../assets/images/menuicon/star_filled.png') // 색이 들어있는 별
-              : require('../../../assets/images/searchicon/emptystaricon.png') // 비어있는 별
+              ? require('../../../assets/images/menuicon/star_filled.png')
+              : require('../../../assets/images/searchicon/emptystaricon.png')
           }
           style={styles.favoriteIcon}
         />

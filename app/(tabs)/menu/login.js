@@ -1,57 +1,101 @@
-import React from "react";
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet } from "react-native";
-import { useRouter } from 'expo-router';
+import React, { useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Modal, Alert } from "react-native";
+import { useRouter } from "expo-router";
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+import app from "../../firebaseConfig"; // Firebase 설정 파일 가져오기
 
 export default function Login() {
   const router = useRouter();
+  const [email, setEmail] = useState(""); // 이메일 상태
+  const [password, setPassword] = useState(""); // 비밀번호 상태
+  const [modalVisible, setModalVisible] = useState(false); // 모달 상태
+  const auth = getAuth(app);
+
+  
+  const handleLogin = async () => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      Alert.alert("로그인 성공", `환영합니다, ${userCredential.user.email}`);
+      router.push("/MM/main"); // 로그인 성공 시 메인 화면으로 이동
+    } catch (error) {
+      setModalVisible(true); // 모달 표시
+    }
+  };
 
   return (
-    <View style={styles.container}>
-      {/* Top Space */}
-      <View style={styles.topSpace} />
+    <>
+      <View style={styles.container}>
+        {/* Top Space */}
+        <View style={styles.topSpace} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Image source={require("../../../assets/images/mainicon/로그인 아이콘.png")} style={styles.headerIcon} />
-        <Text style={styles.headerText}>로그인</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Image source={require("../../../assets/images/mainicon/로그인 아이콘.png")} style={styles.headerIcon} />
+          <Text style={styles.headerText}>로그인</Text>
+        </View>
+
+        {/* Logo */}
+        <View style={styles.logoContainer}>
+          <Image source={require("../../../assets/images/menuicon/directions_subway.png")} style={styles.logo} />
+          <Text style={styles.logoText}>M.M.</Text>
+        </View>
+
+        {/* Input Fields */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="이메일"
+            style={styles.input}
+            placeholderTextColor="#A9A9A9"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <TextInput
+            placeholder="비밀번호"
+            secureTextEntry={true}
+            style={styles.input}
+            placeholderTextColor="#A9A9A9"
+            value={password}
+            onChangeText={setPassword}
+          />
+        </View>
+
+        {/* Login Button */}
+        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+          <Text style={styles.loginButtonText}>로그인</Text>
+        </TouchableOpacity>
+
+        {/* Signup Prompt */}
+        <Text style={styles.signupPrompt}>
+          회원이 아니신가요? 지금 M.M 가입하러 가기
+        </Text>
+
+        {/* Back Button */}
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Image source={require("../../../assets/images/mainicon/뒤로가기.png")} style={styles.backIcon} />
+        </TouchableOpacity>
       </View>
-
-      {/* Logo */}
-      <View style={styles.logoContainer}>
-        <Image source={require("../../../assets/images/menuicon/directions_subway.png")} style={styles.logo} />
-        <Text style={styles.logoText}>M.M.</Text>
-      </View>
-
-      {/* Input Fields */}
-      <View style={styles.inputContainer}>
-        <TextInput
-          placeholder="ID"
-          style={styles.input}
-          placeholderTextColor="#A9A9A9"
-        />
-        <TextInput
-          placeholder="PASSWORD"
-          secureTextEntry={true}
-          style={styles.input}
-          placeholderTextColor="#A9A9A9"
-        />
-      </View>
-
-      {/* Login Button */}
-      <TouchableOpacity style={styles.loginButton}>
-        <Text style={styles.loginButtonText}>로그인</Text>
-      </TouchableOpacity>
-
-      {/* Signup Prompt */}
-      <Text style={styles.signupPrompt}>
-        회원이 아니신가요? 지금 M.M 가입하러 가기
-      </Text>
-
-      {/* Back Button */}
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Image source={require("../../../assets/images/mainicon/뒤로가기.png")} style={styles.backIcon} />
-      </TouchableOpacity>
-    </View>
+      
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalText}>계정이 없습니다</Text>
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.modalButtonText}>확인</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -139,5 +183,38 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     tintColor: "#87CEEB",
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)", // 반투명 배경
+  },
+  modalContainer: {
+    width: "80%",
+    padding: 20,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5, // Android에서의 그림자 효과
+  },
+  modalText: {
+    fontSize: 18,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  modalButton: {
+    backgroundColor: "#0288d1",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+  },
+  modalButtonText: {
+    color: "#fff",
+    fontSize: 16,
   },
 });
