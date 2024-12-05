@@ -12,11 +12,10 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { getAuth } from 'firebase/auth';
 import { removeFavoriteFromFirestore } from '../back/favoritesService';
-import { clearFavoritesFromFirestore } from '../back/favoritesService';
 
 
 const SearchScreen = () => {
@@ -25,6 +24,11 @@ const SearchScreen = () => {
   const [activeTab, setActiveTab] = useState('recent');
   const [recentRecords, setRecentRecords] = useState([]);
   const [favoriteStations, setFavoriteStations] = useState([]);
+
+  useEffect(() => {
+    loadRecentRecords();
+  }, []);
+  
 
   const fetchFavoriteStations = async () => {
     try {
@@ -62,39 +66,65 @@ const SearchScreen = () => {
         Alert.alert("경고", "검색어를 입력해주세요.");
         return;
       }
-    
+  
       const stationsCollectionRef = collection(db, "Stations");
       const querySnapshot = await getDocs(stationsCollectionRef);
       const matchingDoc = querySnapshot.docs.find((doc) => doc.id === searchText.trim());
-
+  
       if (!matchingDoc) {
         Alert.alert("알림", "찾으시는 역이 없습니다.");
       } else {
         // 검색 결과가 있을 경우 최근 기록에 추가
         const newRecord = {
           id: matchingDoc.id,
-          station: matchingDoc.data().station, // 역 이름 추가
-          code: matchingDoc.data().code // 역 코드 추가
         };
-
-        console.log(newRecord);
-
+  
+        console.log("추가된 기록:", newRecord);
+  
         setRecentRecords((prev) => {
-  const isDuplicate = prev.some((item) => item.id === newRecord.id);
-  if (isDuplicate) {
-    console.log("중복 항목:", newRecord);
-    return prev; // 중복 방지
-    }
-  const updatedRecords = [newRecord, ...prev];
-   console.log("업데이트된 기록:", updatedRecords); // 업데이트 확인
-  return updatedRecords; // 상태 업데이트
-});
+          const isDuplicate = prev.some((item) => item.id === newRecord.id);
+          if (isDuplicate) {
+            console.log("중복 항목:", newRecord);
+            return prev; // 중복 방지
+          }
+          const updatedRecords = [newRecord, ...prev];
+          console.log("업데이트된 기록:", updatedRecords); // 업데이트 확인
+          return updatedRecords; // 상태 업데이트
+        });
+  
+        // Firestore 중복 확인 및 저장
+        const searchTextRef = collection(db, "searchText");
+        const existingQuery = query(searchTextRef, where("searchtext", "==", newRecord.id));
+        const existingSnapshot = await getDocs(existingQuery);
+  
+        if (existingSnapshot.empty) {
+          // Firestore에 저장
+          await addDoc(searchTextRef, { searchtext: newRecord.id });
+          console.log("Firestore에 저장 완료:", newRecord.id);
+        } else {
+          console.log("이미 Firestore에 저장된 검색어입니다.");
+        }
       }
     } catch (error) {
       console.error("검색 중 오류:", error.message);
       Alert.alert("오류", "검색 중 문제가 발생했습니다.");
     }
   };
+
+  const loadRecentRecords = async () => {
+    try {
+      const searchTextRef = collection(db, "searchText");
+      const querySnapshot = await getDocs(searchTextRef);
+      const loadedRecords = querySnapshot.docs.map((doc) => ({
+        id: doc.data().searchtext,
+      }));
+      setRecentRecords(loadedRecords);
+      console.log("Firestore에서 검색 기록 불러오기 완료:", loadedRecords);
+    } catch (error) {
+      console.error("Firestore 데이터 불러오기 중 오류:", error.message);
+    }
+  };
+  
 
   const handleSearchChange = (text) => {
     setSearchText(text);
@@ -126,12 +156,22 @@ const SearchScreen = () => {
   const clearAllRecords = async () => {
     try {
       if (activeTab === 'recent') {
-        // 최근 기록 비우기
+        // Firestore에서 검색 기록 삭제
+        const searchTextRef = collection(db, "searchText");
+        const querySnapshot = await getDocs(searchTextRef);
+  
+        // 각 문서를 개별적으로 삭제
+        for (const doc of querySnapshot.docs) {
+          await deleteDoc(doc.ref); // 문서 삭제
+          console.log(`삭제된 문서 ID: ${doc.id}`);
+        }
+  
+        console.log("Firestore에서 모든 검색 기록 삭제 완료");
+  
+        // 로컬 상태 비우기
         setRecentRecords([]);
       } else {
-        // 즐겨찾기 전체 삭제
-        await clearFavoritesFromFirestore(); // Firestore에서 삭제
-        setFavoriteStations([]); // 로컬 상태 비우기
+        console.log("즐겨찾기는 삭제하지 않습니다.");
       }
     } catch (error) {
       console.error("전체 삭제 중 오류:", error.message);
@@ -140,9 +180,8 @@ const SearchScreen = () => {
 
   const filteredRecords =
   activeTab === 'recent'
-    ? recentRecords.filter((item) => item.id === searchText.trim()) // ID 정확히 일치
-    : favoriteStations; // 즐겨찾기는 검색 조건 없이 전체 리스트 반환
-
+    ? recentRecords // 모든 기록 표시
+    : favoriteStations; // 즐겨찾기는 기존 로직 유지
 
     const renderStationItem = ({ item }) => (
       <View style={styles.stationItem}>
@@ -161,9 +200,9 @@ const SearchScreen = () => {
             </TouchableOpacity>
           )}
           {/* 역 정보: ID만 표시 */}
-          <Text style={styles.stationId}>{item.id}</Text>
+          <Text style={styles.stationId}>{item.station}</Text>
         </View>
-        <TouchableOpacity style={styles.deleteIcon} onPress={() => removeStation(item.id)}>
+        <TouchableOpacity style={styles.deleteIcon} onPress={() => removeFromFavorites(item.id)}>
           <Image
             source={require('../../../assets/images/searchicon/X.png')}
             style={{ width: 16, height: 16 }}
@@ -376,5 +415,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
 });
-
 export default SearchScreen;
