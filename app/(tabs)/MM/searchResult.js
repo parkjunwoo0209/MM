@@ -1,6 +1,7 @@
+import { getRouteInfoFromState } from 'expo-router/build/LocationProvider';
 import React, { useState } from 'react';
 import { Platform, StatusBar } from 'react-native'; // Platform과 StatusBar 임포트
-import { useRouter } from 'expo-router'; // 이 줄 추가
+import { useRouter } from 'expo-router';
 
 import {
   View,
@@ -52,11 +53,24 @@ const initialMockData = [
       { type: '하차', station: '303', details: '', duration: 0 },
     ],
   },
+  {
+    id: '2',
+    time: '21분', // 전체 소요 시간
+    cost: '1000원', // 비용
+    transfers: 2, // 환승 횟수
+    isFavorite: false, // 즐겨찾기 여부
+    steps: [
+      { type: '승차', station: '620', details: '4개 역 이동 | 10분 소요', duration: 10 },
+      { type: '환승', station: '702', details: '3개 역 이동 | 7분 소요', duration: 4 },
+      { type: '환승', station: '503', details: '2개 역 이동 | 7분 소요', duration: 7 },
+      { type: '하차', station: '303', details: '', duration: 0 },
+    ],
+  },
+  
 ];
 
 const SearchResult = () => {
-  const router = useRouter(); // 이 줄 추가
-
+  const router = useRouter();
   // 출발역, 도착역 상태
   const [departureStation, setDepartureStation] = useState('');
   const [arrivalStation, setArrivalStation] = useState('');
@@ -117,14 +131,18 @@ const SearchResult = () => {
 
   // 그래프 렌더링
   const renderGraph = (steps) => {
+
+  
+
     const totalDuration = steps.reduce((sum, step) => sum + step.duration, 0);
     let cumulativeWidth = 0; // 누적 너비 추적
-    const graphWidth = 348; // 그래프 전체 너비 고정
+    const graphWidth = 328; // 그래프 전체 너비 고정
 
     return (
       <View style={styles.graphContainer}>
         <View style={styles.graph}>
           {steps.map((step, index) => {
+            
             const segmentWidth = (step.duration / totalDuration) * graphWidth; // 구간 비율에 따른 너비 계산
             const circlePosition = cumulativeWidth; // 써클 시작 위치
             cumulativeWidth += segmentWidth; // 누적 너비 업데이트
@@ -135,7 +153,7 @@ const SearchResult = () => {
 
 
             const color = stepColors[step.type] || defaultColor; // 동적 배경색
-            const borderColor = stepBorderColors[step.type] || defaultColor; // 동적 테두리 색상
+            const borderColor = stepBorderColors[step.type] || defaultColor; // 동적 테두�� 색상
             // 선 색상: 다음 구간이 '하차'라면 하차 색상 적용, 아니면 현재 구간 색상 적용
             const lineColor =
             nextStep?.type === '하차' ? stepColors['하차'] : stepColors[step.type];
@@ -226,12 +244,6 @@ const SearchResult = () => {
           );
         })}
       </View>
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Image
-          source={require('../../../assets/images/mainicon/뒤로가기.png')}
-          style={styles.backIcon}
-        />
-      </TouchableOpacity>
     </View>
   );
 
@@ -239,8 +251,8 @@ const SearchResult = () => {
     <View style={styles.container}>
       <View style={styles.searchSection}>
         <View style={styles.row}>
-          <TouchableOpacity style={styles.iconContainer}>
-            <Image source={ArrowBackIcon} style={styles.icon} />
+        <TouchableOpacity style={styles.iconContainer}>
+           {/*} <Image source={ArrowBackIcon} style={styles.icon} />*/}
           </TouchableOpacity>
           <View style={styles.searchBox}>
             <TextInput
@@ -324,15 +336,23 @@ const SearchResult = () => {
           </View>
         </View>
       </Modal>
+      {/* 뒤로가기 섹션 */}
+    <View style={styles.backSection}>
+      <TouchableOpacity 
+        style={styles.backButton} 
+        onPress={() => router.back()}
+      >
+        <Image source={ArrowBackIcon} style={styles.icon} />
+      </TouchableOpacity>
+    </View>
 
-      
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { 
-    flex: 1, // 화며 전체 차지
+    flex: 1, // 화면 전체 차지
     backgroundColor: '#F7F7F7',
     marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 20, // 플랫폼별 marginTop 추가
     
@@ -361,7 +381,7 @@ const styles = StyleSheet.create({
     borderRadius: 9999, // 모서리 둥글게
     paddingHorizontal: 15, // 양쪽 내부 여백
     flexDirection: 'row', // 아이콘, 텍스트 입력 가로로 배치
-    alignItems: 'center', // 내부 요소 수직 중앙 정렬
+    alignItems: 'center', // 내부 요소 수직 중앙 정��
     elevation: 1,
   },
   // 입력 필드
@@ -527,7 +547,7 @@ const styles = StyleSheet.create({
   graphContainer: { 
     height: 36, 
     width: '100%',
-    maxWidth: 348, // 그래프 너비 고정
+    maxWidth: 328, // 그래프 너비 고정
     justifyContent: 'center', // 수직 중앙 정렬
     alignSelf: 'center',
     alignItems: 'center', // 수직 중앙 정렬
@@ -577,6 +597,24 @@ const styles = StyleSheet.create({
     height: 20, 
     position: 'absolute' 
   },
+  backSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start', // 왼쪽 정렬
+    padding: 10, // 내부 여백
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 15,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.1)', // 섹션 위쪽 구분선
+    height: 50, // 정렬 섹션과 동일한 높이
+  },
+  backButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+
+
 });
 
 export default SearchResult;

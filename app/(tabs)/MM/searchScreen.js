@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { collection, query, where, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { getAuth } from 'firebase/auth';
 import { removeFavoriteFromFirestore } from '../back/favoritesService';
@@ -46,8 +46,7 @@ const SearchScreen = () => {
       const querySnapshot = await getDocs(q);
 
       const favoritesData = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+        id: doc.data().station,
       }));
 
       setFavoriteStations(favoritesData);
@@ -78,13 +77,13 @@ const SearchScreen = () => {
         const newRecord = {
           id: matchingDoc.id,
         };
-  
         console.log("추가된 기록:", newRecord);
   
         setRecentRecords((prev) => {
           const isDuplicate = prev.some((item) => item.id === newRecord.id);
           if (isDuplicate) {
             console.log("중복 항목:", newRecord);
+            Alert.alert("알림", "이미 최근 기록에 있습니다.");
             return prev; // 중복 방지
           }
           const updatedRecords = [newRecord, ...prev];
@@ -134,24 +133,57 @@ const SearchScreen = () => {
     setSearchText('');
   };
 
-  const removeStation = (id) => {
-    if (activeTab === 'recent') {
-      // 최근 기록에서 특정 항목 제거
-      setRecentRecords((prev) => prev.filter((item) => item.id !== id));
-    } else {
-      // 즐겨찾기에서 특정 항목 제거
-      setFavoriteStations((prev) => prev.filter((item) => item.id !== id));
+  const handleSearchAndClear = async () => {
+    try {
+      await handleSearch();
+      clearSearchText();
+      router.push({
+        pathname: '/MM/main', // main.js로 이동
+        params: { stationID: searchText.trim() }, // 검색된 stationID 전달
+      });
+    } catch (error) {
+      console.error("Error during search and clear:", error);
+    }
+  };
+  
+  const removeStation = async (id) => {
+    try {
+      if (activeTab === 'recent') {
+        // Firestore에서 해당 문서 찾기
+        const searchTextRef = collection(db, "searchText");
+        const q = query(searchTextRef, where("searchtext", "==", id)); // searchtext 필드가 id와 일치하는 문서 찾기
+        const querySnapshot = await getDocs(q);
+  
+        if (!querySnapshot.empty) {
+          // 해당 문서를 Firestore에서 삭제
+          const docId = querySnapshot.docs[0].id; // 첫 번째 문서 ID 가져오기
+          const docRef = doc(db, "searchText", docId); // 문서 참조 생성
+          await deleteDoc(docRef); // 문서 삭제
+          console.log(`Firestore에서 문서 삭제 완료: ${docId}`);
+        } else {
+          console.log("해당 역이 Firestore에 없습니다.");
+        }
+  
+        // 로컬 상태에서 항목 제거
+        setRecentRecords((prev) => prev.filter((item) => item.id !== id));
+      } else {
+        // 즐겨찾기에서 특정 항목 제거
+        setFavoriteStations((prev) => prev.filter((item) => item.id !== id));
+      }
+    } catch (error) {
+      console.error("Firestore에서 항목 삭제 중 오류:", error.message);
     }
   };
 
   const removeFromFavorites = async (id) => {
-    try {
-      await removeFavoriteFromFirestore(id); // Firestore에서 데이터 삭제
-      setFavoriteStations((prev) => prev.filter((item) => item.id !== id)); // 로컬 상태 업데이트
-    } catch (error) {
-      console.error("즐겨찾기 해제 중 오류:", error.message);
-    }
-  };
+  try {
+    await removeFavoriteFromFirestore(id); // id 기준으로 삭제
+    setFavoriteStations((prev) => prev.filter((item) => item.id !== id)); // 로컬 상태 업데이트
+    console.log(`즐겨찾기 ID '${id}' 삭제 완료`);
+  } catch (error) {
+    console.error("즐겨찾기 삭제 중 오류:", error.message);
+  }
+};
 
   const clearAllRecords = async () => {
     try {
@@ -184,7 +216,16 @@ const SearchScreen = () => {
     : favoriteStations; // 즐겨찾기는 기존 로직 유지
 
     const renderStationItem = ({ item }) => (
-      <View style={styles.stationItem}>
+      <TouchableOpacity // 항목 전체를 터치 가능하게 설정
+        style={styles.stationItem}
+        onPress={() => {
+          console.log(`Selected station: ${item.id}`); // 선택된 역 로그 출력 (디버깅용)
+          router.push({
+            pathname: '/MM/main', // main.js로 이동
+            params: { stationID: item.id }, // 검색된 stationID 전달
+          }) // 메인 화면으로 이동
+        }}
+      >
         <View style={styles.stationInfo}>
           {activeTab === 'recent' ? (
             <Image
@@ -200,15 +241,15 @@ const SearchScreen = () => {
             </TouchableOpacity>
           )}
           {/* 역 정보: ID만 표시 */}
-          <Text style={styles.stationId}>{item.station}</Text>
+          <Text style={styles.stationId}>{item.id}</Text>
         </View>
-        <TouchableOpacity style={styles.deleteIcon} onPress={() => removeFromFavorites(item.id)}>
+        <TouchableOpacity style={styles.deleteIcon} onPress={() => removeStation(item.id)}>
           <Image
             source={require('../../../assets/images/searchicon/X.png')}
             style={{ width: 16, height: 16 }}
           />
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
 
   return (
@@ -223,7 +264,7 @@ const SearchScreen = () => {
         <TouchableOpacity style={styles.clearButton} onPress={clearSearchText}>
           <Text style={styles.clearButtonText}>X</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
+        <TouchableOpacity style={styles.searchButton} onPress={handleSearchAndClear}>
         <Image
             source={require('../../../assets/images/mainicon/Trailing-Elements.png')} // 이미지 경로
             style={styles.searchButtonImage}

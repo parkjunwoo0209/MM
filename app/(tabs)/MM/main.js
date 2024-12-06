@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -17,7 +17,7 @@ import { useRouter } from 'expo-router';
 import SubwayMap from './SubwayMap';
 import { stationCoordinates } from './location';
 import { ReactNativeZoomableView } from '@openspacelabs/react-native-zoomable-view';
-
+import { useLocalSearchParams } from 'expo-router';
 
 const { width } = Dimensions.get('window'); // 화면 너비를 가져옴
 
@@ -29,9 +29,19 @@ const MainScreen = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(-width)).current; // 초기 위치를 화면 왼쪽으로 설정
   const [selectedStation, setSelectedStation] = useState(null);
+  const { stationID } = useLocalSearchParams();
 
   // stationCoordinates의 키를 배열로 변환
   const stationIds = Object.keys(stationCoordinates);
+
+  useEffect(() => {
+    if (stationID && stationCoordinates[stationID]) {
+      const { top, left } = stationCoordinates[stationID];
+      setPopupPosition({ top, left, station: stationID });
+      setPopupVisible(true);
+    }
+  }, [stationID]);
+
 
   const openMenu = () => {
     setIsModalVisible(true);
