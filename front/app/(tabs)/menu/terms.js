@@ -1,25 +1,29 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTheme } from '@/hooks/ThemeContext';
 
 const Agreement = () => {
   const router = useRouter();
+  const { isDarkMode } = useTheme();
 
   return (
-    <View style={styles.container}>
-      {/* 상단 여백 */}
-      <View style={styles.topSpace} />
-
-      {/* 상단 배너 */}
-      <View style={styles.banner}>
-        <Image source={require('../../../assets/images/menuicon/error.png')} style={styles.errorIcon} />
-        <Text style={styles.bannerText}>이용약관</Text>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? '#151718' : '#f5f5f5' }]}>
+      <View style={[styles.topSpace, { backgroundColor: isDarkMode ? '#151718' : '#f5f5f5' }]} />
+      
+      <View style={[styles.banner, { backgroundColor: isDarkMode ? '#2C2C2C' : '#87CEEB' }]}>
+        <Image 
+          source={require('../../../assets/images/menuicon/error.png')} 
+          style={[styles.errorIcon, { tintColor: isDarkMode ? '#FFFFFF' : undefined }]}
+        />
+        <Text style={[styles.bannerText, { color: '#FFFFFF' }]}>이용약관</Text>
       </View>
 
-      {/* Scrollable Content */}
       <ScrollView contentContainerStyle={{ paddingBottom: 150, paddingHorizontal: 20 }}>
-        <Text style={styles.sectionTitle}>[M.M(Metro Map) 이용약관]{'\n'}{'\n'}</Text>
-        <Text style={styles.text}>
+        <Text style={[styles.sectionTitle, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}>
+          [M.M(Metro Map) 이용약관]{'\n'}{'\n'}
+        </Text>
+        <Text style={[styles.text, { color: isDarkMode ? '#FFFFFF' : '#333' }]}>
           <Text style={styles.bold}>제 1조 (목적){'\n'}</Text>
           본 약관은 지하철 길찾기 어플(이하 "본 어플")을 이용함에 있어 사용자와 서비스 제공자 간의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.{'\n\n'}
 
@@ -43,12 +47,11 @@ const Agreement = () => {
         </Text>
       </ScrollView>
 
-      {/* Back Button at Bottom Left */}
-      <TouchableOpacity 
-        style={styles.backButton}
-        onPress={() => router.back()}
-      >
-        <Image source={require('../../../assets/images/mainicon/뒤로가기.png')} style={styles.backIcon} />
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Image 
+          source={require('../../../assets/images/mainicon/뒤로가기.png')} 
+          style={[styles.backIcon, { tintColor: isDarkMode ? '#FFFFFF' : '#87CEEB' }]}
+        />
       </TouchableOpacity>
     </View>
   );

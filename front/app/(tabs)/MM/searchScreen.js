@@ -12,11 +12,10 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../../firebaseConfig';
-import { getAuth } from 'firebase/auth';
-import { removeFavoriteFromFirestore } from '../back/favoritesService';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from '../../api/apiClient';
+import { useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '../../../hooks/ThemeContext';
 
 const SearchScreen = () => {
   const router = useRouter();
@@ -24,6 +23,7 @@ const SearchScreen = () => {
   const [activeTab, setActiveTab] = useState('recent');
   const [recentRecords, setRecentRecords] = useState([]);
   const [favoriteStations, setFavoriteStations] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
 
   useEffect(() => {
     loadRecentRecords();
@@ -32,21 +32,17 @@ const SearchScreen = () => {
 
   const fetchFavoriteStations = async () => {
     try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-
-      if (!user) {
+      const userEmail = await AsyncStorage.getItem('userEmail');
+      
+      if (!userEmail) {
         console.error("로그인된 사용자가 없습니다.");
         return;
       }
 
-      const userId = user.uid;
-      const favoritesCollection = collection(db, "favorites");
-      const q = query(favoritesCollection, where("userId", "==", userId));
-      const querySnapshot = await getDocs(q);
-
-      const favoritesData = querySnapshot.docs.map((doc) => ({
-        id: doc.data().station,
+      const response = await apiClient.get(`/api/favorites/${userEmail}`);
+      const favoritesData = response.data.map(item => ({
+        id: item.favoriteText, // 역 ID를 고유 식별자로 사용
+        station: item.favoriteText // 역 이름으로 표시
       }));
 
       setFavoriteStations(favoritesData);
@@ -65,43 +61,42 @@ const SearchScreen = () => {
         Alert.alert("경고", "검색어를 입력해주세요.");
         return;
       }
-  
-      const stationsCollectionRef = collection(db, "Stations");
-      const querySnapshot = await getDocs(stationsCollectionRef);
-      const matchingDoc = querySnapshot.docs.find((doc) => doc.id === searchText.trim());
-  
-      if (!matchingDoc) {
-        Alert.alert("알림", "찾으시는 역이 없습니다.");
-      } else {
-        // 검색 결과가 있을 경우 최근 기록에 추가
-        const newRecord = {
-          id: matchingDoc.id,
-        };
-        console.log("추가된 기록:", newRecord);
-  
-        setRecentRecords((prev) => {
-          const isDuplicate = prev.some((item) => item.id === newRecord.id);
-          if (isDuplicate) {
-            console.log("중복 항목:", newRecord);
-            Alert.alert("알림", "이미 최근 기록에 있습니다.");
-            return prev; // 중복 방지
-          }
-          const updatedRecords = [newRecord, ...prev];
-          console.log("업데이트된 기록:", updatedRecords); // 업데이트 확인
-          return updatedRecords; // 상태 업데이트
+
+      const userEmail = await AsyncStorage.getItem('userEmail');
+      if (!userEmail) {
+        Alert.alert("알림", "로그인이 필요합니다.");
+        return;
+      }
+
+      // 역 검색 및 최근 검색어 저장
+      try {
+        // 최근 검색어 저장
+        await apiClient.post("/api/recent-searches", {
+          email: userEmail,
+          stationName: searchText.trim()
         });
-  
-        // Firestore 중복 확인 및 저장
-        const searchTextRef = collection(db, "searchText");
-        const existingQuery = query(searchTextRef, where("searchtext", "==", newRecord.id));
-        const existingSnapshot = await getDocs(existingQuery);
-  
-        if (existingSnapshot.empty) {
-          // Firestore에 저장
-          await addDoc(searchTextRef, { searchtext: newRecord.id });
-          console.log("Firestore에 저장 완료:", newRecord.id);
+        
+        // 검로 검색 결과 저장 (새로 추가)
+        const response = await apiClient.get(`/routes/search?start=${searchText.trim()}`);
+        const routeData = response.data;
+        setSearchResults(routeData);
+
+        // 검색어 초기화
+        clearSearchText();
+        
+        // 최근 검색어 목록 새로고침
+        loadRecentRecords();
+
+        // 메인 화면으로 이동
+        router.push({
+          pathname: '/MM/main',
+          params: { stationID: searchText.trim() },
+        });
+      } catch (error) {
+        if (error.response?.status === 404) {
+          Alert.alert("알림", "찾으시는 역이 없습니다.");
         } else {
-          console.log("이미 Firestore에 저장된 검색어입니다.");
+          throw error;
         }
       }
     } catch (error) {
@@ -112,15 +107,20 @@ const SearchScreen = () => {
 
   const loadRecentRecords = async () => {
     try {
-      const searchTextRef = collection(db, "searchText");
-      const querySnapshot = await getDocs(searchTextRef);
-      const loadedRecords = querySnapshot.docs.map((doc) => ({
-        id: doc.data().searchtext,
-      }));
-      setRecentRecords(loadedRecords);
-      console.log("Firestore에서 검색 기록 불러오기 완료:", loadedRecords);
+      const userEmail = await AsyncStorage.getItem('userEmail');
+      if (!userEmail) return;
+
+      console.log('API 요청 시작:', `/api/recent-searches/${userEmail}`);
+
+      const response = await apiClient.get(`/api/recent-searches/${userEmail}`);
+      console.log('API 응답:', response.data);
+
+      setRecentRecords(response.data.map(item => ({
+        id: item.id,           // 문서 ID (삭제할 때 필요)
+        station: item.searchtext  // 화면에 표시할 역 이름
+      })));
     } catch (error) {
-      console.error("Firestore 데이터 불러오기 중 오류:", error.message);
+      console.error("최근 검색어 로드 중 오류:", error.response || error);
     }
   };
   
@@ -135,78 +135,120 @@ const SearchScreen = () => {
 
   const handleSearchAndClear = async () => {
     try {
-      await handleSearch();
-      clearSearchText();
-      router.push({
-        pathname: '/MM/main', // main.js로 이동
-        params: { stationID: searchText.trim() }, // 검색된 stationID 전달
-      });
+      if (!searchText.trim()) {
+        Alert.alert("경고", "검색어를 입력해주세요.");
+        return;
+      }
+
+      const userEmail = await AsyncStorage.getItem('userEmail');
+      if (!userEmail) {
+        Alert.alert("알림", "로그인이 필요합니다.");
+        return;
+      }
+
+      try {
+        // 역 검색 및 최근 검색어 저장
+        await apiClient.post("/api/recent-searches", {
+          email: userEmail,
+          stationName: searchText.trim()
+        });
+
+        // 경로 검색 결과를 AsyncStorage에 저장
+        const routeResponse = await apiClient.get(`/routes/search?start=${departureStation}&end=${arrivalStation}`);
+        await AsyncStorage.setItem('lastRouteResult', JSON.stringify(routeResponse.data));
+        
+        // 검색어 초기화
+        clearSearchText();
+        
+        // 메인 화면으로 이동
+        router.push({
+          pathname: '/MM/main',
+          params: { stationID: searchText.trim() }
+        });
+      } catch (error) {
+        if (error.response?.status === 404) {
+          Alert.alert("알림", "찾으시는 역이 없습니다.");
+        } else {
+          throw error;
+        }
+      }
     } catch (error) {
       console.error("Error during search and clear:", error);
+      Alert.alert("오류", "검색 중 문제가 발생했습니다.");
     }
   };
   
   const removeStation = async (id) => {
     try {
       if (activeTab === 'recent') {
-        // Firestore에서 해당 문서 찾기
-        const searchTextRef = collection(db, "searchText");
-        const q = query(searchTextRef, where("searchtext", "==", id)); // searchtext 필드가 id와 일치하는 문서 찾기
-        const querySnapshot = await getDocs(q);
-  
-        if (!querySnapshot.empty) {
-          // 해당 문서를 Firestore에서 삭제
-          const docId = querySnapshot.docs[0].id; // 첫 번째 문서 ID 가져오기
-          const docRef = doc(db, "searchText", docId); // 문서 참조 생성
-          await deleteDoc(docRef); // 문서 삭제
-          console.log(`Firestore에서 문서 삭제 완료: ${docId}`);
-        } else {
-          console.log("해당 역이 Firestore에 없습니다.");
+        const userEmail = await AsyncStorage.getItem('userEmail');
+        if (!userEmail) {
+          Alert.alert("알림", "로그인이 필요합니다.");
+          return;
         }
-  
+
+        // API를 통해 최근 검색어 삭제
+        await apiClient.delete(`/api/recent-searches/${userEmail}/${id}`);
+        
         // 로컬 상태에서 항목 제거
         setRecentRecords((prev) => prev.filter((item) => item.id !== id));
+        console.log(`검색 기록 '${id}' 삭제 완료`);
       } else {
-        // 즐겨찾기에서 특정 항목 제거
-        setFavoriteStations((prev) => prev.filter((item) => item.id !== id));
+        // 즐겨찾기 삭제는 기존 함수 사용
+        await removeFromFavorites(id);
       }
     } catch (error) {
-      console.error("Firestore에서 항목 삭제 중 오류:", error.message);
+      console.error("항목 삭제 중 오류:", error.message);
+      Alert.alert("오류", "항목 삭제 중 문제가 발생했습니다.");
     }
   };
 
   const removeFromFavorites = async (id) => {
-  try {
-    await removeFavoriteFromFirestore(id); // id 기준으로 삭제
-    setFavoriteStations((prev) => prev.filter((item) => item.id !== id)); // 로컬 상태 업데이트
-    console.log(`즐겨찾기 ID '${id}' 삭제 완료`);
-  } catch (error) {
-    console.error("즐겨찾기 삭제 중 오류:", error.message);
-  }
-};
+    try {
+      const userEmail = await AsyncStorage.getItem('userEmail');
+      if (!userEmail) {
+        Alert.alert("알림", "로그인이 필요합니다.");
+        return;
+      }
+
+      // API를 통해 즐겨찾기 삭제
+      await apiClient.post("/api/favorites/remove", {
+        email: userEmail,
+        favoriteText: id
+      });
+
+      // 로컬 상태 업데이트
+      setFavoriteStations((prev) => prev.filter((item) => item.id !== id));
+      console.log(`즐겨찾기 '${id}' 삭제 완료`);
+    } catch (error) {
+      console.error("즐겨찾기 삭제 중 오류:", error.message);
+      Alert.alert("오류", "즐겨찾기 삭제 중 문제가 발생했습니다.");
+    }
+  };
 
   const clearAllRecords = async () => {
     try {
       if (activeTab === 'recent') {
-        // Firestore에서 검색 기록 삭제
-        const searchTextRef = collection(db, "searchText");
-        const querySnapshot = await getDocs(searchTextRef);
-  
-        // 각 문서를 개별적으로 삭제
-        for (const doc of querySnapshot.docs) {
-          await deleteDoc(doc.ref); // 문서 삭제
-          console.log(`삭제된 문서 ID: ${doc.id}`);
+        const userEmail = await AsyncStorage.getItem('userEmail');
+        if (!userEmail) {
+          Alert.alert("알림", "로그인이 필요합니다.");
+          return;
         }
-  
-        console.log("Firestore에서 모든 검색 기록 삭제 완료");
-  
+
+        // 현재 표시된 모든 최근 검색어를 순회���며 삭제
+        for (const record of recentRecords) {
+          await apiClient.delete(`/api/recent-searches/${userEmail}/${record.id}`);
+        }
+
         // 로컬 상태 비우기
         setRecentRecords([]);
+        console.log("모든 검색 기록 삭제 완료");
       } else {
         console.log("즐겨찾기는 삭제하지 않습니다.");
       }
     } catch (error) {
       console.error("전체 삭제 중 오류:", error.message);
+      Alert.alert("오류", "전체 삭제 중 문제가 발생했습니다.");
     }
   };
 
@@ -216,14 +258,27 @@ const SearchScreen = () => {
     : favoriteStations; // 즐겨찾기는 기존 로직 유지
 
     const renderStationItem = ({ item }) => (
-      <TouchableOpacity // 항목 전체를 터치 가능하게 설정
+      <TouchableOpacity
         style={styles.stationItem}
-        onPress={() => {
-          console.log(`Selected station: ${item.id}`); // 선택된 역 로그 출력 (디버깅용)
-          router.push({
-            pathname: '/MM/main', // main.js로 이동
-            params: { stationID: item.id }, // 검색된 stationID 전달
-          }) // 메인 화면으로 이동
+        onPress={async () => {
+          console.log(`Selected station: ${item.station}`);
+          try {
+            // 경로 검색 API 호출
+            const response = await apiClient.get(`/routes/search?start=${item.station}`);
+            const routeData = response.data;
+            
+            // 검색 결과를 AsyncStorage에 저장
+            await AsyncStorage.setItem('lastSearchResult', JSON.stringify(routeData));
+            
+            // 메인 화면으로 이동
+            router.push({
+              pathname: '/MM/main',
+              params: { stationID: item.station }
+            });
+          } catch (error) {
+            console.error('Error during route search:', error);
+            Alert.alert('오류', '경로 검색에 실패했습니다.');
+          }
         }}
       >
         <View style={styles.stationInfo}>
@@ -240,8 +295,7 @@ const SearchScreen = () => {
               />
             </TouchableOpacity>
           )}
-          {/* 역 정보: ID만 표시 */}
-          <Text style={styles.stationId}>{item.id}</Text>
+          <Text style={styles.stationId}>{item.station}</Text>
         </View>
         <TouchableOpacity style={styles.deleteIcon} onPress={() => removeStation(item.id)}>
           <Image
@@ -251,6 +305,14 @@ const SearchScreen = () => {
         </TouchableOpacity>
       </TouchableOpacity>
     );
+
+  // useFocusEffect를 사용하여 화면이 포커스를 받을 때마다 데이터 새로고침
+  useFocusEffect(
+    React.useCallback(() => {
+      loadRecentRecords();
+      fetchFavoriteStations();
+    }, [])
+  );
 
   return (
     <View style={styles.container}>

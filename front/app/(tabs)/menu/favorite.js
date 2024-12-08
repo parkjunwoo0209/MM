@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from "@/app/api/apiClient";
+import { useTheme } from '../../../hooks/ThemeContext';
 
 export default function BookMark() {
   const router = useRouter();

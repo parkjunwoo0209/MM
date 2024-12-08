@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from "react-native";
 import apiClient from "@/app/api/apiClient";
 import { useRouter } from "expo-router";
+import { useTheme } from '../../../hooks/ThemeContext';
 
 const SignUp = () => {
   const [formData, setFormData] = useState({
@@ -27,7 +28,7 @@ const SignUp = () => {
         return;
       }
 
-      const response = await apiClient.post("/api/register", formData);
+      const response = await apiClient.post("/api/auth/register", formData);
       Alert.alert('성공', '회원가입이 완료되었습니다.', [
         {
           text: '확인',

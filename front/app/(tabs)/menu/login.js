@@ -3,6 +3,9 @@ import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Modal, Aler
 import { useRouter } from "expo-router";
 import apiClient from "@/app/api/apiClient";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '../../../hooks/ThemeContext';
+
+
 
 export default function Login() {
   const router = useRouter();

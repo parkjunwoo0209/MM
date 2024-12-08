@@ -6,6 +6,7 @@ import {useRouter} from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import apiClient from '@/app/api/apiClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '../../../hooks/ThemeContext';
 
 const SubwayMap = ({ 
   popupPosition, 
@@ -28,54 +29,52 @@ const SubwayMap = ({
     if (type === '출발') {
       setSelectedStations((prev) => {
         const newState = { ...prev, departure: popupPosition.station };
-        console.log(newState);
-        console.log(newState.departure);
-        console.log(newState.arrival);
-        if (newState.departure && newState.arrival) {
-          // API 호출로 사용 기록 업데이트
-          result = apiClient.post("/routes/updateUsageHistory", {
-            userId: user.uid,
-            startStation: newState.departure,
-            endStation: newState.arrival,
-          })
-            .then(() => console.log("사용 기록 업데이트 완료"))
-            .catch((error) => console.error("출발 업데이트 실패:", error.message));
-
-          router.push('/MM/searchResult');
-        }else {
-          console.log("출발역과 도착역이 선택되지 않았습니다.");
-        }
+        console.log("출발역 설정:", newState.departure);
         return newState;
       });
-    } else if (type === '도착') {
-      setSelectedStations(async (prev) => {
+      setPopupVisible(false);
+    } 
+    else if (type === '도착') {
+      setSelectedStations((prev) => {
+        if (!prev.departure) {
+          Alert.alert('알림', '출발역을 먼저 선택해주세요.');
+          return prev;
+        }
+        
         const newState = { ...prev, arrival: popupPosition.station };
-        console.log(newState);
-        console.log(newState.departure);
-        console.log(newState.arrival);
-        console.log(user.uid, "유저아이디");
+        
         if (newState.departure && newState.arrival) {
-          try {
-            result = await apiClient.post("/routes/updateUsageHistory", {
-              userId: user.uid,
+          apiClient.get(`/api/routes/connections`, {
+            params: {
               startStation: newState.departure,
-              endStation: newState.arrival,
+              endStation: newState.arrival
+            }
+          })
+          .then(response => {
+            console.log("API 응답 데이터 구조:", response.data);
+
+            router.push({
+              pathname: '/MM/searchResult',
+              params: { 
+                routeData: JSON.stringify(response.data),
+                departure: newState.departure,
+                arrival: newState.arrival
+              }
             });
-            console.log(result, "결과있는지 확인");
-            console.log("도착 업데이트 완료");
-            router.push('/MM/searchResult');
-          } catch (error) {
-            console.error("도착 업데이트 실패:", result.error.message);
-          }
-        }else {
-          console.log("출발역과 도착역이 선택되지 않았습니다.");
+          })
+          .catch(error => {
+            console.error("API 요청 실패:", error);
+            Alert.alert('오류', '경로를 찾을 수 없습니다.');
+          });
         }
         return newState;
       });
-    } else if (type === '즐겨찾기') {
+      setPopupVisible(false);
+    } 
+    else if (type === '즐겨찾기') {
+      // 기존 즐겨찾기 코드는 그대로 유지
       try {
         const userEmail = await AsyncStorage.getItem('userEmail');
-
         if (!userEmail) {
           Alert.alert('오류', '로그인이 필요한 서비스입니다.');
           router.push('/menu/login');
@@ -85,14 +84,12 @@ const SubwayMap = ({
         const stationId = popupPosition.station;
 
         if (favorites.includes(stationId)) {
-          // 즐겨찾기 제거
           await apiClient.post("/api/favorites/remove", {
             email: userEmail,
             favoriteText: stationId
           });
           setFavorites(prev => prev.filter(fav => fav !== stationId));
         } else {
-          // 즐겨찾기 추가
           await apiClient.post("/api/favorites/add", {
             email: userEmail,
             favoriteText: stationId

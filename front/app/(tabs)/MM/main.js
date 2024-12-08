@@ -22,7 +22,7 @@ import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from "@/app/api/apiClient";
 import { useFocusEffect } from '@react-navigation/native';
-
+import { useTheme } from '../../../hooks/ThemeContext';
 const { width } = Dimensions.get('window'); // 화면 너비를 가져옴
 
 const MainScreen = () => {
@@ -36,6 +36,7 @@ const MainScreen = () => {
   const { stationID } = useLocalSearchParams();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState(null);
+  const [searchResults, setSearchResults] = useState(null);  // 검색 결과 저장을 위한 상태 추가
 
   // stationCoordinates의 키를 배열로 변환
   const stationIds = Object.keys(stationCoordinates);
@@ -125,10 +126,37 @@ const MainScreen = () => {
     setSearchText('');
   };
 
+  // 검색 아이콘 클릭 핸들러 수정
+  const handleSearchIconClick = async () => {
+    try {
+      // AsyncStorage에서 마지막 검로 검색 결과 가져오기
+      const lastRouteResult = await AsyncStorage.getItem('lastRouteResult');
+      
+      if (lastRouteResult) {
+        // 저장된 경로 검색 결과가 있으면 searchResult 화면으로 이동하며 데이터 전달
+        router.push({
+          pathname: '/MM/searchResult',
+          params: { routeData: lastRouteResult }
+        });
+      } else {
+        // 저장된 검색 결과가 없으면 빈 검색 결과 화면으로 이동
+        router.push('/MM/searchResult');
+      }
+    } catch (error) {
+      console.error('Error fetching last route result:', error);
+      router.push('/MM/searchResult');
+    }
+  };
+
+  // 검색 결과를 저장하는 함수
+  const saveSearchResults = (results) => {
+    setSearchResults(results);
+  };
+
   return (
     <View style={{ flex: 1 }}>
         <View style={styles.container}>
-          {/* ���단 검색 바 */}
+          {/* 상단 검색 바 */}
           <View style={styles.searchBar}>
             <TouchableOpacity style={styles.menuButton} onPress={openMenu}>
               <Image
@@ -144,7 +172,10 @@ const MainScreen = () => {
               placeholderTextColor="#999"
               keyboardType="default"
               onSubmitEditing={handleSearch}
-              onPress={() => router.push('/MM/searchScreen')}
+              onPress={() => router.push({
+                pathname: '/MM/searchScreen',
+                params: { onSearchComplete: saveSearchResults }
+              })}
             />
             <TouchableOpacity
               style={styles.searchButton}
@@ -171,7 +202,7 @@ const MainScreen = () => {
           {/* 검색 아이콘 */}
           <TouchableOpacity
             style={styles.searchIconContainer}
-            onPress={() => router.push('/MM/searchResult')}
+            onPress={handleSearchIconClick}
           >
             <Image
               source={require('../../../assets/images/mainicon/search.png')}
@@ -345,7 +376,7 @@ const styles = StyleSheet.create({
   modalLogo: {
     width: 100, // 로고 크기
     height: 100,
-    resizeMode: 'contain', // 이미지 비율 유지
+    resizeMode: 'contain', // 이미지 비율 지
   },
   modalItems: {
     marginTop: 20,

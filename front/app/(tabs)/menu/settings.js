@@ -1,48 +1,55 @@
-import React, { useState } from "react";
+import React from "react";
 import { View, Text, StyleSheet, Image, Switch, TouchableOpacity } from "react-native";
-import { useRouter } from 'expo-router';  
+import { useRouter } from 'expo-router';
+import { useTheme } from '../../../hooks/ThemeContext';
 
 const Option = () => {
   const router = useRouter();
-  const [isBoldText, setIsBoldText] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { isDarkMode, toggleDarkMode } = useTheme();
 
   return (
-    <View style={styles.container}>
+    <View style={[
+      styles.container,
+      { backgroundColor: isDarkMode ? '#151718' : '#FFFFFF' }
+    ]}>
       {/* 상단 여백 */}
-      <View style={styles.topSpace} />
+      <View style={[
+        styles.topSpace,
+        { backgroundColor: isDarkMode ? '#151718' : '#FFFFFF' }
+      ]} />
 
       {/* 상단 배너 */}
-      <View style={styles.banner}>
+      <View style={[
+        styles.banner,
+        { backgroundColor: isDarkMode ? '#2C2C2C' : '#87CEEB' }
+      ]}>
         <Image source={require("../../../assets/images/mainicon/설정 아이콘.png")} style={styles.icon} />
-        <Text style={styles.bannerText}>설정</Text>
+        <Text style={[
+          styles.bannerText,
+          { color: isDarkMode ? '#FFFFFF' : '#000000' }
+        ]}>설정</Text>
       </View>
 
-      {/* 옵션 내용 */}
-      <View style={styles.options}>
+      <View style={styles.optionsContainer}>
         <View style={styles.optionItem}>
-          <Text style={styles.optionText}>볼드체 텍스트</Text>
-          <Switch
-            value={isBoldText}
-            onValueChange={() => setIsBoldText((previousState) => !previousState)}
-            thumbColor={isBoldText ? "#87CEEB" : "#f4f3f4"}
-            trackColor={{ false: "#767577", true: "#87CEEB" }}
-          />
-        </View>
-        <View style={styles.optionItem}>
-          <Text style={styles.optionText}>다크 모드</Text>
+          <Text style={[
+            styles.optionText,
+            { color: isDarkMode ? '#FFFFFF' : '#333333' }
+          ]}>다크 모드</Text>
           <Switch
             value={isDarkMode}
-            onValueChange={() => setIsDarkMode((previousState) => !previousState)}
+            onValueChange={toggleDarkMode}
             thumbColor={isDarkMode ? "#87CEEB" : "#f4f3f4"}
             trackColor={{ false: "#767577", true: "#87CEEB" }}
           />
         </View>
       </View>
 
-      {/* 뒤로가기 버튼 */}
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Image source={require("../../../assets/images/mainicon/뒤로가기.png")} style={styles.backIcon} />
+        <Image 
+          source={require("../../../assets/images/mainicon/뒤로가기.png")} 
+          style={[styles.backIcon, { tintColor: isDarkMode ? '#FFFFFF' : '#87CEEB' }]} 
+        />
       </TouchableOpacity>
     </View>
   );

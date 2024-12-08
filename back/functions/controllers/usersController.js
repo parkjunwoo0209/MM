@@ -1,6 +1,7 @@
 // MM/functions/controllers/usersController.js
 
 const { db } = require("../firebaseConfig");
+const routesDao = require("../dao/routesDao");
 
 // 사용자 등록하기
 exports.register = async (req, res) => {
@@ -77,5 +78,106 @@ exports.getProfile = async (req, res) => {
   } catch (error) {
     console.error("Error fetching user profile:", error.message);
     res.status(500).send(`Error fetching user profile: ${error.message}`);
+  }
+};
+
+// 최근 검색어 추가
+exports.addRecentSearch = async (req, res) => {
+  try {
+    const { email, stationName } = req.body;
+
+    if (!email || !stationName) {
+      return res.status(400).json({ error: "이메일과 역 이름이 필요합니다." });
+    }
+
+    // stationID로 역 존재 여부 확인
+    const stationExists = await routesDao.checkStationExists(stationName);
+    if (!stationExists) {
+      return res.status(404).json({ error: "존재하지 않는 역입니다." });
+    }
+
+    // 최근 검색어 컬렉션에서 사용자의 검색 기록 확인
+    const searchTextRef = db.collection("SearchText");
+    const existingQuery = await searchTextRef
+      .where("email", "==", email)
+      .where("searchtext", "==", stationName)
+      .get();
+
+    // 중복 검색어가 없을 경우에만 추가
+    if (existingQuery.empty) {
+      await searchTextRef.add({
+        email,
+        searchtext: stationName
+      });
+    }
+
+    res.status(201).json({ message: "검색어가 저장되었습니다." });
+  } catch (error) {
+    console.error("Recent search error:", error);
+    res.status(500).json({ error: "검색어 저장 중 오류가 발생했습니다." });
+  }
+};
+
+// 최근 검색 조회
+exports.getRecentSearches = async (req, res) => {
+  try {
+    const { email } = req.params;
+    console.log('검색어 조회 요청:', email); // 디버깅용 로그
+
+    if (!email) {
+      return res.status(400).json({ error: "이메일이 필요합니다." });
+    }
+
+    const searchTextRef = db.collection("SearchText");
+    const snapshot = await searchTextRef
+      .where("email", "==", email)
+      .get();
+
+    console.log('검색된 데이터:', snapshot.docs.map(doc => doc.data())); // 디버깅용 로그
+
+    const searches = snapshot.docs.map(doc => ({
+      id: doc.id,
+      searchtext: doc.data().searchtext
+    }));
+
+    res.json(searches);
+  } catch (error) {
+    console.error("Error fetching recent searches:", error);
+    res.status(500).json({ error: "검색 기록을 가져오는 중 오류가 발생했습니다." });
+  }
+};
+
+// 최근 검색어 삭제
+exports.deleteRecentSearch = async (req, res) => {
+  try {
+    const { email, searchId } = req.params;
+
+    const searchDoc = await db.collection("SearchText").doc(searchId).get();
+    
+    if (!searchDoc.exists) {
+      return res.status(404).json({ error: "검색 기록을 찾을 수 없습니다." });
+    }
+
+    if (searchDoc.data().email !== email) {
+      return res.status(403).json({ error: "권한이 없습니다." });
+    }
+
+    await db.collection("SearchText").doc(searchId).delete();
+    res.json({ message: "검색 기록이 삭제되었습니다." });
+  } catch (error) {
+    console.error("Error deleting recent search:", error);
+    res.status(500).json({ error: "검색 기록 삭제 중 오류가 발생했습니다." });
+  }
+};
+
+// 최근 검색어 전체 삭제
+exports.deleteAllRecentSearches = async (req, res) => {
+  try {
+    const { email } = req.params;
+    await usersService.deleteAllRecentSearches(email);
+    res.json({ message: "모든 검색 기록이 삭제되었습니다." });
+  } catch (error) {
+    console.error("Error deleting all recent searches:", error);
+    res.status(500).json({ error: "검색 기록 삭제 중 오류가 발생했습니다." });
   }
 };

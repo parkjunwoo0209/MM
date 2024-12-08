@@ -1,105 +1,120 @@
-const Graph = require("../utils/dijkstra");
+const Graph = require('../utils/dijkstra');
 const routesDao = require("../dao/routesDao");
-const { convertTime } = require("../utils/timeCalculator");
-const admin = require("firebase-admin");
 
-// 최적 경로 계산
-exports.getOptimalRoute = async (startStation, endStation) => {
+exports.findConnections = async (startStation, endStation) => {
   try {
-    const connections = await routesDao.getAllConnections();
+    const allConnections = await routesDao.getAllConnections();
+    console.log("모든 연결 정보 개수:", allConnections.length);
+    
+    if (allConnections.length === 0) {
+      throw new Error("연결 정보를 찾을 수 없습니다.");
+    }
+    
     const graph = new Graph();
-
-    // 그래프 구성
-    connections.forEach(({ startStation, endStation, time, distance, cost }) => {
-      graph.addEdge(startStation, endStation, time, distance, cost);
+    
+    // 모든 연결을 그래프에 추가
+    allConnections.forEach(connection => {
+      graph.addEdge(
+        connection.startStation,
+        connection.endStation,
+        connection.time,
+        connection.distance,
+        connection.cost,
+        connection.startLine,  // 노선 정보 추가
+        connection.endLine     // 노선 정보 추가
+      );
     });
 
-    // 경로 계산
-    const shortestTime = graph.findShortestPath(startStation, endStation, "time");
-    const shortestDistance = graph.findShortestPath(startStation, endStation, "distance");
-    const lowestCost = graph.findShortestPath(startStation, endStation, "cost");
+    // 세 가지 기준으로 경로 찾기
+    const timeResult = graph.findShortestPath(startStation, endStation, 'time');
+    const distanceResult = graph.findShortestPath(startStation, endStation, 'distance');
+    const costResult = graph.findShortestPath(startStation, endStation, 'cost');
 
-    // 결과 반환
-    return {
-      shortestTime: {
-        path: shortestTime.path,
-        travelTime: convertTime(shortestTime.time), // 시간 변환
-        totalWeight: shortestTime.time,
-      },
-      shortestDistance: {
-        path: shortestDistance.path,
-        travelTime: convertTime(shortestDistance.distance), // 거리 변환
-        totalWeight: shortestDistance.distance,
-      },
-      lowestCost: {
-        path: lowestCost.path,
-        travelTime: convertTime(lowestCost.cost), // 비용 변환
-        totalWeight: lowestCost.cost,
-      },
-    };
-  } catch (error) {
-    throw new Error(`Error calculating optimal routes: ${error.message}`);
-  }
-};
-
-// 경로 안내 시작
-exports.startRouteGuidance = async (userId, route, criteria) => {
-  const { path, transfers } = route;
-
-  for (let i = 0; i < path.length - 1; i++) {
-    const currentStation = path[i];
-    const nextStation = path[i + 1];
-
-    // 연결 시간 가져오기 및 변환
-    const travelTime = await routesDao.getConnectionTime(currentStation, nextStation);
-    const { hours, minutes, seconds } = convertTime(travelTime);
-
-    // 조건 설정
-    const isFirstStation = i === 0; // 첫 번째 역
-    const isTransfer = transfers.includes(nextStation); // 환승 여부
-    const isLastStation = i === path.length - 2; // 도착 전역 여부
-
-    if (isFirstStation) {
-      // 안내 시작 알림
-      const startMessage = {
-        notification: {
-          title: "안내 시작",
-          body: `${criteria} 경로 안내를 시작합니다. 다음 역은 ${nextStation}입니다.`,
-        },
-        topic: `user_${userId}`,
-      };
-
-      admin.messaging().send(startMessage).catch(err => {
-        console.error("Error sending start notification:", err.message);
-      });
-    } else {
-      // 경로 안내 알림
-      setTimeout(() => {
-        let title = "경로 안내";
-        let body = `다음 역은 ${nextStation}입니다.`;
-
-        if (isLastStation) {
-          // 도착 안내 우선
-          title = "도착 안내";
-          body = `다음 역(${nextStation})에서 내리세요.`;
-        } else if (isTransfer) {
-          // 환승 안내
-          title = "환승 안내";
-          body = `다음 역(${nextStation})에서 환승하세요.`;
-        }
-
-        const message = {
-          notification: {
-            title,
-            body,
-          },
-          topic: `user_${userId}`,
-        };
-
-        admin.messaging().send(message).catch(err => {
-          console.error("Error sending notification:", err.message);
-        });
-      }, (hours * 3600 + minutes * 60 + seconds) * 1000); // 지연 시간 계산
+    if (!timeResult || !distanceResult || !costResult) {
+      throw new Error(`${startStation}에서 ${endStation}까지의 경로를 찾을 수 없습니다.`);
     }
+
+    // 각 경로에 대한 상세 정보 수집
+    const getPathDetails = (pathResult) => {
+      const connections = [];
+      let totalTime = 0;
+      let totalDistance = 0;
+      let totalCost = 0;
+      const lines = []; // 경유하는 노선들
+
+      for (let i = 0; i < pathResult.path.length - 1; i++) {
+        const currentStation = pathResult.path[i];
+        const nextStation = pathResult.path[i + 1];
+        
+        const connection = allConnections.find(conn => 
+          conn.startStation === currentStation && 
+          conn.endStation === nextStation
+        );
+
+        if (connection) {
+          connections.push(connection);
+          totalTime += connection.time;
+          totalDistance += connection.distance;
+          totalCost += connection.cost;
+          if (connection.startLine) {
+            lines.push(connection.startLine);
+          }
+        }
+      }
+
+      return {
+        path: pathResult.path,
+        connections,
+        totalTime,
+        totalDistance,
+        totalCost,
+        lines: [...new Set(lines)] // 중복 제거된 노선 목록
+      };
+    };
+
+    const finalResult = {
+      timeOptimized: {
+        ...getPathDetails(timeResult),
+        type: '최소 시간'
+      },
+      distanceOptimized: {
+        ...getPathDetails(distanceResult),
+        type: '최소 거리'
+      },
+      costOptimized: {
+        ...getPathDetails(costResult),
+        type: '최소 비용'
+      }
+    };
+
+    console.log("최종 결과:", {
+      timeOptimized: {
+        stations: finalResult.timeOptimized.path.length,
+        totalTime: finalResult.timeOptimized.totalTime,
+        totalDistance: finalResult.timeOptimized.totalDistance,
+        totalCost: finalResult.timeOptimized.totalCost,
+        lines: finalResult.timeOptimized.lines
+      },
+      distanceOptimized: {
+        stations: finalResult.distanceOptimized.path.length,
+        totalTime: finalResult.distanceOptimized.totalTime,
+        totalDistance: finalResult.distanceOptimized.totalDistance,
+        totalCost: finalResult.distanceOptimized.totalCost,
+        lines: finalResult.distanceOptimized.lines
+      },
+      costOptimized: {
+        stations: finalResult.costOptimized.path.length,
+        totalTime: finalResult.costOptimized.totalTime,
+        totalDistance: finalResult.costOptimized.totalDistance,
+        totalCost: finalResult.costOptimized.totalCost,
+        lines: finalResult.costOptimized.lines
+      }
+    });
+
+    return finalResult;
+
+  } catch (error) {
+    console.error("경로 검색 오류:", error);
+    throw new Error(`경로 검색 중 오류 발생: ${error.message}`);
   }
 };

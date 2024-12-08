@@ -41,3 +41,51 @@ exports.startRouteGuidance = async (req, res) => {
     res.status(500).send(`Error starting route guidance: ${error.message}`);
   }
 };
+
+exports.getConnections = async (req, res) => {
+  try {
+    const { startStation, endStation } = req.query;
+    console.log("라우트 컨트롤러 호출됨");
+    console.log("출발역:", startStation);
+    console.log("도착역:", endStation);
+    
+    if (!startStation || !endStation) {
+      throw new Error("출발역과 도착역이 모두 필요합니다.");
+    }
+
+    // routesService의 findConnections 함수 직접 호출
+    const result = await routesService.findConnections(startStation, endStation);
+    
+    // 결과가 있는지 확인
+    if (!result) {
+      throw new Error("경로를 찾을 수 없습니다.");
+    }
+
+    // 세 가지 경로 모두 로깅
+    console.log("=== 최소 시간 경로 ===");
+    console.log("경로:", result.timeOptimized.path);
+    console.log("총 소요 시간:", result.timeOptimized.totalTime);
+    console.log("총 거리:", result.timeOptimized.totalDistance);
+    console.log("총 비용:", result.timeOptimized.totalCost);
+    console.log("노선:", result.timeOptimized.lines);
+
+    console.log("\n=== 최소 거리 경로 ===");
+    console.log("경로:", result.distanceOptimized.path);
+    console.log("총 소요 시간:", result.distanceOptimized.totalTime);
+    console.log("총 거리:", result.distanceOptimized.totalDistance);
+    console.log("총 비용:", result.distanceOptimized.totalCost);
+    console.log("노선:", result.distanceOptimized.lines);
+
+    console.log("\n=== 최소 비용 경로 ===");
+    console.log("경로:", result.costOptimized.path);
+    console.log("총 소요 시간:", result.costOptimized.totalTime);
+    console.log("총 거리:", result.costOptimized.totalDistance);
+    console.log("총 비용:", result.costOptimized.totalCost);
+    console.log("노선:", result.costOptimized.lines);
+    
+    res.json(result);
+  } catch (error) {
+    console.error("경로 검색 오류:", error);
+    res.status(400).json({ error: error.message });
+  }
+};

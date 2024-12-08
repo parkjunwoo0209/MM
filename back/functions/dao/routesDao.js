@@ -7,7 +7,11 @@ exports.getAllConnections = async () => {
     if (snapshot.empty) {
       throw new Error("No connections found");
     }
-    return snapshot.docs.map(doc => doc.data());
+    // 문서 ID와 데이터를 모두 포함하여 반환
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
   } catch (error) {
     throw new Error(`Error fetching connections: ${error.message}`);
   }
@@ -40,5 +44,17 @@ exports.getStationLines = async (stationID) => {
     return stationDoc.data().lines;
   } catch (error) {
     throw new Error(`Error fetching station lines: ${error.message}`);
+  }
+};
+
+// 역 존재 여부 확인
+exports.checkStationExists = async (stationName) => {
+  try {
+    const snapshot = await db.collection("Stations")
+      .where("stationID", "==", stationName)
+      .get();
+    return !snapshot.empty;
+  } catch (error) {
+    throw new Error(`Error checking station existence: ${error.message}`);
   }
 };
