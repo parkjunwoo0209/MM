@@ -12,12 +12,16 @@ import {
   Text,
   Dimensions,
   TouchableWithoutFeedback,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import SubwayMap from './SubwayMap';
 import { stationCoordinates } from './location';
 import { ReactNativeZoomableView } from '@openspacelabs/react-native-zoomable-view';
 import { useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from "@/app/api/apiClient";
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window'); // 화면 너비를 가져옴
 
@@ -30,6 +34,8 @@ const MainScreen = () => {
   const slideAnim = useRef(new Animated.Value(-width)).current; // 초기 위치를 화면 왼쪽으로 설정
   const [selectedStation, setSelectedStation] = useState(null);
   const { stationID } = useLocalSearchParams();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userEmail, setUserEmail] = useState(null);
 
   // stationCoordinates의 키를 배열로 변환
   const stationIds = Object.keys(stationCoordinates);
@@ -42,6 +48,41 @@ const MainScreen = () => {
     }
   }, [stationID]);
 
+  // 로그인 상태 확인 함수
+  const checkLoginStatus = async () => {
+    try {
+      const email = await AsyncStorage.getItem('userEmail');
+      if (email) {
+        setIsLoggedIn(true);
+        setUserEmail(email);
+      } else {
+        setIsLoggedIn(false);
+        setUserEmail(null);
+      }
+    } catch (error) {
+      console.error("로그인 상태 확인 중 오류:", error);
+    }
+  };
+
+  // 로그아웃 처리 함수
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('userEmail');
+      setIsLoggedIn(false);
+      setUserEmail(null);
+      closeMenu();
+      Alert.alert('알림', '로그아웃되었습니다.');
+    } catch (error) {
+      console.error("로그아웃 중 오류:", error);
+    }
+  };
+
+  // 컴포넌트가 마운트되거나 포커스를 받을 때 로그인 상태 확인
+  useFocusEffect(
+    React.useCallback(() => {
+      checkLoginStatus();
+    }, [])
+  );
 
   const openMenu = () => {
     setIsModalVisible(true);
@@ -87,7 +128,7 @@ const MainScreen = () => {
   return (
     <View style={{ flex: 1 }}>
         <View style={styles.container}>
-          {/* 상단 검색 바 */}
+          {/* ���단 검색 바 */}
           <View style={styles.searchBar}>
             <TouchableOpacity style={styles.menuButton} onPress={openMenu}>
               <Image
@@ -165,16 +206,33 @@ const MainScreen = () => {
                     />
                   </View>
                   <View style={styles.modalItems}>
-                    <TouchableOpacity
-                      style={styles.menuItem}
-                      onPress={() => handleMenuNavigation('login')}
-                    >
-                      <Image
-                        source={require('../../../assets/images/mainicon/로그인 아이콘.png')}
-                        style={styles.icon}
+                    {!isLoggedIn ? (
+                      // 로그인하지 않은 경우
+                      <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => handleMenuNavigation('login')}
+                      >
+                        <Image
+                          source={require('../../../assets/images/mainicon/로그인 아이콘.png')}
+                          style={styles.icon}
                         />
-                      <Text style={styles.menuText}>로그인</Text>
-                    </TouchableOpacity>
+                        <Text style={styles.menuText}>로그인</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      // 로그인한 경우
+                      <>
+                        <View style={styles.userInfo}>
+                          <Text style={styles.emailText}>{userEmail}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.menuItem}
+                          onPress={handleLogout}
+                        >
+                          <Text style={styles.menuText}>로그아웃</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                    
                     <TouchableOpacity
                       style={styles.menuItem}
                       onPress={() => handleMenuNavigation('favorite')}
@@ -182,7 +240,7 @@ const MainScreen = () => {
                       <Image
                         source={require('../../../assets/images/mainicon/즐겨찾기 아이콘.png')}
                         style={styles.icon}
-                        />
+                      />
                       <Text style={styles.menuText}>즐겨찾기</Text>
                     </TouchableOpacity>
                     <TouchableOpacity

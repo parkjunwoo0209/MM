@@ -1,12 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, Image, FlatList, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Image, FlatList, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { collection, getDocs, deleteDoc, doc, query, where } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
-import { getAuth } from 'firebase/auth';
 import { useFocusEffect } from '@react-navigation/native';
-import { removeFavoriteFromFirestore } from '../back/favoritesService';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from "@/app/api/apiClient";
 
 export default function BookMark() {
   const router = useRouter();
@@ -14,22 +11,17 @@ export default function BookMark() {
 
   const fetchData = async () => {
     try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-
-      if (!user) {
+      const userEmail = await AsyncStorage.getItem('userEmail');
+      
+      if (!userEmail) {
         console.error("로그인된 사용자가 없습니다.");
         return;
       }
 
-      const userId = user.uid;
-      const favoritesCollection = collection(db, "favorites");
-      const q = query(favoritesCollection, where("userId", "==", userId));
-      const querySnapshot = await getDocs(q);
-
-      const favoritesData = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const response = await apiClient.get(`/api/favorites/${userEmail}`);
+      const favoritesData = response.data.map(item => ({
+        id: item.favoriteText, // 역 ID를 고유 식별자로 사용
+        station: item.favoriteText // 역 이름으로 표시
       }));
 
       setData(favoritesData);
@@ -46,26 +38,60 @@ export default function BookMark() {
   );
 
   // 즐겨찾기 삭제
-  const handleRemoveItem = async (id) => {
+  const handleRemoveItem = async (stationId) => {
     try {
-      await removeFavoriteFromFirestore(id); // Firestore에서 데이터 삭제
-      setData((prevData) => prevData.filter((item) => item.id !== id)); // 로컬 상태 업데이트
+      const userEmail = await AsyncStorage.getItem('userEmail');
+      if (!userEmail) {
+        console.error("로그인된 사용자가 없습니다.");
+        return;
+      }
+
+      // 삭제 전 사용자 확인
+      Alert.alert(
+        "즐겨찾기 삭제",
+        "정말 삭제하시겠습니까?",
+        [
+          {
+            text: "취소",
+            style: "cancel"
+          },
+          {
+            text: "삭제",
+            onPress: async () => {
+              try {
+                await apiClient.post("/api/favorites/remove", {
+                  email: userEmail,
+                  favoriteText: stationId
+                });
+                
+                // 성공적으로 삭제되면 로컬 상태 업데이트
+                setData((prevData) => prevData.filter((item) => item.id !== stationId));
+                
+                // 삭제 완료 메시지
+                Alert.alert("알림", "즐겨찾기가 삭제되었습니다.");
+              } catch (error) {
+                console.error("즐겨찾기 삭제 중 오류:", error);
+                Alert.alert("오류", "즐겨찾기 삭제 중 문제가 발생했습니다.");
+              }
+            },
+            style: "destructive"
+          }
+        ]
+      );
     } catch (error) {
       console.error("즐겨찾기 삭제 중 오류:", error.message);
+      Alert.alert("오류", "즐겨찾기 삭제 중 문제가 발생했습니다.");
     }
   };
 
   // 각 리스트 항목 렌더링
   const renderItem = ({ item }) => (
     <View style={styles.itemContainer}>
-      {/* 아이콘 */}
       <Image
         source={require("../../../assets/images/menuicon/location_on.png")}
         style={styles.icon}
       />
-      {/* 라벨 */}
       <Text style={styles.label}>{item.station}</Text>
-      {/* 즐겨찾기 삭제 버튼 */}
       <TouchableOpacity onPress={() => handleRemoveItem(item.id)} style={{ padding: 10 }}>
         <Image
           source={require("../../../assets/images/menuicon/star_filled.png")}
@@ -77,10 +103,7 @@ export default function BookMark() {
 
   return (
     <View style={styles.container}>
-      {/* 상단 여백 */}
       <View style={styles.topSpace} />
-
-      {/* 상단 배너 */}
       <View style={styles.banner}>
         <Image
           source={require("../../../assets/images/mainicon/즐겨찾기 아이콘.png")}
@@ -89,7 +112,6 @@ export default function BookMark() {
         <Text style={styles.bannerText}>즐겨찾기</Text>
       </View>
 
-      {/* 리스트 */}
       <FlatList
         data={data}
         renderItem={renderItem}
@@ -97,7 +119,6 @@ export default function BookMark() {
         ListEmptyComponent={<Text style={styles.emptyText}>즐겨찾기가 없습니다.</Text>}
       />
 
-      {/* 왼쪽 하단 뒤로가기 아이콘 */}
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Image
           source={require("../../../assets/images/mainicon/뒤로가기.png")}
@@ -164,7 +185,7 @@ const styles = StyleSheet.create({
     borderRadius: 30, // 버튼 둥글게 유지
     backgroundColor: "transparent", // 배경색 제거
     shadowColor: "transparent", // 그림자 제거
-    elevation: 0, // 안드로이드 그림자 제거
+    elevation: 0, 
   },
   backIcon: {
     width: 40, // 뒤로가기 아이콘 크기

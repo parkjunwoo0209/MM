@@ -1,24 +1,39 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Modal, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
-import app from "../../firebaseConfig"; // Firebase 설정 파일 가져오기
+import apiClient from "@/app/api/apiClient";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Login() {
   const router = useRouter();
-  const [email, setEmail] = useState(""); // 이메일 상태
-  const [password, setPassword] = useState(""); // 비밀번호 상태
-  const [modalVisible, setModalVisible] = useState(false); // 모달 상태
-  const auth = getAuth(app);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [modalVisible, setModalVisible] = useState(false);
 
-  
   const handleLogin = async () => {
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      Alert.alert("로그인 성공", `환영합니다, ${userCredential.user.email}`);
-      router.push("/MM/main"); // 로그인 성공 시 메인 화면으로 이동
+      console.log("로그인 시도:", { email, password }); // 디버깅용
+
+      const response = await apiClient.post("/api/auth/login", {
+        email: email,
+        passwd: password
+      });
+
+      console.log("서버 응답:", response.data); // 디버깅용
+
+      if (response.data.success) {
+        await AsyncStorage.setItem('userEmail', email);
+        Alert.alert("로그인 성공", `환영합니다, ${email}`);
+        router.push("/MM/main");
+      }
     } catch (error) {
-      setModalVisible(true); // 모달 표시
+      console.error("로그인 에러:", error.response?.data || error); // 디버깅용
+      if (error.response?.status === 401) {
+        Alert.alert('오류', '이메일 또는 비밀번호가 일치하지 않습니다.');
+      } else {
+        Alert.alert('오류', '로그인 중 오류가 발생했습니다.');
+      }
+      setModalVisible(true);
     }
   };
 
@@ -67,9 +82,11 @@ export default function Login() {
         </TouchableOpacity>
 
         {/* Signup Prompt */}
-        <Text style={styles.signupPrompt}>
-          회원이 아니신가요? 지금 M.M 가입하러 가기
-        </Text>
+        <TouchableOpacity onPress={() => router.push("/menu/sinup")}>
+          <Text style={styles.signupPrompt}>
+            회원이 아니신가요? 지금 M.M 가입하러 가기
+          </Text>
+        </TouchableOpacity>
 
         {/* Back Button */}
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>

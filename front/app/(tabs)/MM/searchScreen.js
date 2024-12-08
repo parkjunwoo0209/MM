@@ -55,7 +55,7 @@ const SearchScreen = () => {
     }
   };
 
-  useEffect(() => {
+ useEffect(() => {
     fetchFavoriteStations();
   }, []);
 

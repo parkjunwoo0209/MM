@@ -8,10 +8,10 @@ const auth = getAuth(app);
 export const login = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    console.log("User signed in:", userCredential.user);
-    return userCredential.user; // 성공 시 사용자 정보 반환
+    const idToken = await userCredential.user.getIdToken(); // ID 토큰 생성
+    return idToken; // ID 토큰 반환
   } catch (error) {
     console.error("Error signing in:", error.message);
-    throw error; // 에러를 호출한 쪽으로 전달
+    throw error;
   }
 };

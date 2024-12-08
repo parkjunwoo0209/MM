@@ -1,12 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Image, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import { View, Image, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, Alert } from 'react-native';
 import { ReactNativeZoomableView } from '@openspacelabs/react-native-zoomable-view';
 import { stationCoordinates } from './location';
 import {useRouter} from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { db } from '../../firebaseConfig';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import apiClient from '@/app/api/apiClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SubwayMap = ({ 
   popupPosition, 
@@ -14,39 +13,9 @@ const SubwayMap = ({
   setPopupVisible, 
   setPopupPosition
 }) => {
-  const [favorites, setFavorites] = useState([]); // 즐겨찾기 상태
+  const [favorites, setFavorites] = useState([]);
   const [selectedStations, setSelectedStations] = useState({ departure: null, arrival: null });
   const router = useRouter();
-
-  // Firestore에서 즐겨찾기 데이터를 가져오는 함수 추가
-  const fetchFavorites = async () => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      
-      if (!user) {
-        console.log("로그인된 사용자가 없습니다.");
-        return;
-      }
-
-      const favoritesCollection = collection(db, "favorites");
-      const q = query(favoritesCollection, where("userId", "==", user.uid));
-      const querySnapshot = await getDocs(q);
-      
-      const favoriteStations = querySnapshot.docs.map(doc => doc.data().station);
-      setFavorites(favoriteStations);
-    } catch (error) {
-      console.error("즐겨찾기 불러오기 실패:", error);
-    }
-  };
-
-  // 컴포넌트가 마운트되거나 포커스될 때 즐겨찾기 데이터 가져오기
-  useFocusEffect(
-    useCallback(() => {
-      fetchFavorites();
-      setSelectedStations({ departure: null, arrival: null });
-    }, [])
-  );
 
   const handleStationPress = (stationId, top, left) => {
     console.log(`Station ${stationId} pressed at position (${top}, ${left})`);
@@ -54,92 +23,112 @@ const SubwayMap = ({
     setPopupPosition({ top, left, station: stationId });
   };
 
-  const handlePopupOption = (type) => {
+  // 팝업 함수
+  const handlePopupOption = async (type) => {
     if (type === '출발') {
-      console.log(`${popupPosition.station} ${type}로 설정됨`);
       setSelectedStations((prev) => {
         const newState = { ...prev, departure: popupPosition.station };
+        console.log(newState);
+        console.log(newState.departure);
+        console.log(newState.arrival);
         if (newState.departure && newState.arrival) {
+          // API 호출로 사용 기록 업데이트
+          result = apiClient.post("/routes/updateUsageHistory", {
+            userId: user.uid,
+            startStation: newState.departure,
+            endStation: newState.arrival,
+          })
+            .then(() => console.log("사용 기록 업데이트 완료"))
+            .catch((error) => console.error("출발 업데이트 실패:", error.message));
+
           router.push('/MM/searchResult');
+        }else {
+          console.log("출발역과 도착역이 선택되지 않았습니다.");
         }
         return newState;
       });
     } else if (type === '도착') {
-      console.log(`${popupPosition.station} ${type}로 설정됨`);
-      setSelectedStations((prev) => {
+      setSelectedStations(async (prev) => {
         const newState = { ...prev, arrival: popupPosition.station };
-        if (newState.departure && prev.departure) {
-          router.push('/MM/searchResult');
+        console.log(newState);
+        console.log(newState.departure);
+        console.log(newState.arrival);
+        console.log(user.uid, "유저아이디");
+        if (newState.departure && newState.arrival) {
+          try {
+            result = await apiClient.post("/routes/updateUsageHistory", {
+              userId: user.uid,
+              startStation: newState.departure,
+              endStation: newState.arrival,
+            });
+            console.log(result, "결과있는지 확인");
+            console.log("도착 업데이트 완료");
+            router.push('/MM/searchResult');
+          } catch (error) {
+            console.error("도착 업데이트 실패:", result.error.message);
+          }
+        }else {
+          console.log("출발역과 도착역이 선택되지 않았습니다.");
         }
         return newState;
       });
     } else if (type === '즐겨찾기') {
-      setFavorites((prev) => {
-        if (prev.includes(popupPosition.station)) {
-          console.log(`${popupPosition.station}이(가) 즐겨찾기에서 제거됨`);
-          return prev.filter((fav) => fav !== popupPosition.station);
-        } else {
-          console.log(`${popupPosition.station}이(가) 즐겨찾기에 추가됨`);
-          return [...prev, popupPosition.station];
-        }
-      });
-    }
-    setPopupVisible(false);
-  };
+      try {
+        const userEmail = await AsyncStorage.getItem('userEmail');
 
-  const handleOutsidePress = () => {
-    if (popupVisible) {
+        if (!userEmail) {
+          Alert.alert('오류', '로그인이 필요한 서비스입니다.');
+          router.push('/menu/login');
+          return;
+        }
+
+        const stationId = popupPosition.station;
+
+        if (favorites.includes(stationId)) {
+          // 즐겨찾기 제거
+          await apiClient.post("/api/favorites/remove", {
+            email: userEmail,
+            favoriteText: stationId
+          });
+          setFavorites(prev => prev.filter(fav => fav !== stationId));
+        } else {
+          // 즐겨찾기 추가
+          await apiClient.post("/api/favorites/add", {
+            email: userEmail,
+            favoriteText: stationId
+          });
+          setFavorites(prev => [...prev, stationId]);
+        }
+      } catch (error) {
+        console.error("즐겨찾기 처리 중 오류:", error);
+        Alert.alert('오류', error.response?.data?.error || '즐겨찾기 처리 중 오류가 발생했습니다.');
+      }
       setPopupVisible(false);
     }
   };
 
-  const handleFavorite = async (type) => {
-    if (type === "즐겨찾기") {
-      try {
-        const auth = getAuth();
-        const user = auth.currentUser;
-  
-        if (!user) {
-          console.error("로그인된 사용자가 없습니다.");
-          return;
+  // 즐겨찾기 목록 가져오기
+  useFocusEffect(
+    useCallback(() => {
+      const fetchFavorites = async () => {
+        try {
+          const userEmail = await AsyncStorage.getItem('userEmail');
+          if (userEmail) {
+            const response = await apiClient.get(`/api/favorites/${userEmail}`);
+            // favoriteText 필드의 값들을 favorites 상태로 설정
+            setFavorites(response.data.map(item => item.favoriteText));
+          }
+        } catch (error) {
+          console.error("즐겨찾기 불러오기 실패:", error);
         }
-  
-        const userId = user.uid;
-        const favoritesCollection = collection(db, "favorites");
-        const station = popupPosition.station;
-  
-        const q = query(
-          favoritesCollection,
-          where("userId", "==", userId),
-          where("station", "==", station)
-        );
-        const querySnapshot = await getDocs(q);
-  
-        if (!querySnapshot.empty) {
-          // 즐겨찾기 제거
-          querySnapshot.forEach(async (docSnapshot) => {
-            await deleteDoc(doc(db, "favorites", docSnapshot.id));
-          });
-          setFavorites(prev => prev.filter(fav => fav !== station));
-          console.log(`${station}이(가) 즐겨찾기에서 제거됨`);
-        } else {
-          // 즐겨찾기 추가
-          await addDoc(favoritesCollection, {
-            station: station,
-            userId: userId,
-          });
-          setFavorites(prev => [...prev, station]);
-          console.log(`${station}이(가) 즐겨찾기에 추가됨`);
-        }
-      } catch (error) {
-        console.error("즐겨찾기 처리 중 오류:", error.message);
-      }
-    }
-    setPopupVisible(false);
-  };
+      };
+
+      fetchFavorites();
+    }, [])
+  );
 
   return (
-    <TouchableWithoutFeedback onPress={handleOutsidePress}>
+    <TouchableWithoutFeedback>
       <View style={styles.container}>
         <ReactNativeZoomableView
           maxZoom={2}
@@ -176,7 +165,7 @@ const SubwayMap = ({
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.popupButton}
-        onPress={() => handleFavorite('즐겨찾기')}
+        onPress={() => handlePopupOption('즐겨찾기')}
       >
         <Image
           source={
