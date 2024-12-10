@@ -2,11 +2,12 @@
 
 const { db } = require("../firebaseConfig");
 const routesDao = require("../dao/routesDao");
+const admin = require('firebase-admin');
 
 // 사용자 등록하기
 exports.register = async (req, res) => {
   try {
-    const { email, passwd } = req.body;
+    const { email, passwd, fcmToken } = req.body;
 
     if (!email || !passwd) {
       return res.status(400).json({ error: "이메일과 비밀번호를 입력해주세요." });
@@ -24,6 +25,15 @@ exports.register = async (req, res) => {
     }
 
     await db.collection("Users").add({ email, passwd });
+    await admin.firestore()
+      .collection('users')
+      .doc(email)
+      .set({
+        email,
+        fcmToken,
+        // ... 다른 사용자 정보
+      });
+
     res.status(201).json({ message: "회원가입이 완료되었습니다." });
   } catch (error) {
     console.error("Registration error:", error);

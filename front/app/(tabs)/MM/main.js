@@ -23,6 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from "@/app/api/apiClient";
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../../hooks/ThemeContext';
+
 const { width } = Dimensions.get('window'); // 화면 너비를 가져옴
 
 const MainScreen = () => {
@@ -131,7 +132,7 @@ const MainScreen = () => {
     try {
       // AsyncStorage에서 마지막 검로 검색 결과 가져오기
       const lastRouteResult = await AsyncStorage.getItem('lastRouteResult');
-      
+
       if (lastRouteResult) {
         // 저장된 경로 검색 결과가 있으면 searchResult 화면으로 이동하며 데이터 전달
         router.push({
@@ -155,154 +156,158 @@ const MainScreen = () => {
 
   return (
     <View style={{ flex: 1 }}>
-        <View style={styles.container}>
-          {/* 상단 검색 바 */}
-          <View style={styles.searchBar}>
-            <TouchableOpacity style={styles.menuButton} onPress={openMenu}>
-              <Image
-                source={require('../../../assets/images/mainicon/Leading-icon.png')}
-                style={styles.menuIcon}
-              />
-            </TouchableOpacity>
-            <TextInput
-              style={styles.input}
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="역명 검색 · 즐겨찾기"
-              placeholderTextColor="#999"
-              keyboardType="default"
-              onSubmitEditing={handleSearch}
-              onPress={() => router.push({
-                pathname: '/MM/searchScreen',
-                params: { onSearchComplete: saveSearchResults }
-              })}
-            />
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={handleSearch}
-            >
-              <Image
-                source={require('../../../assets/images/mainicon/Trailing-Elements.png')}
-                style={styles.searchIcon}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* 중앙 지하철 이미지 */}
-          <ReactNativeZoomableView style={styles.mapContainer}>
-            <SubwayMap
-              popupPosition={popupPosition}
-              popupVisible={popupVisible}
-              setPopupVisible={setPopupVisible}
-              setPopupPosition={setPopupPosition}
-              selectedStation={selectedStation}
-            />
-          </ReactNativeZoomableView>
-
-          {/* 검색 아이콘 */}
-          <TouchableOpacity
-            style={styles.searchIconContainer}
-            onPress={handleSearchIconClick}
-          >
+      <View style={styles.container}>
+        {/* 상단 검색 바 */}
+        <View style={styles.searchBar}>
+          <TouchableOpacity style={styles.menuButton} onPress={openMenu}>
             <Image
-              source={require('../../../assets/images/mainicon/search.png')}
-              style={styles.floatingSearchIcon}
+              source={require('../../../assets/images/mainicon/Leading-icon.png')}
+              style={styles.menuIcon}
             />
           </TouchableOpacity>
-
-          {/* 하단 광고 배너 */}
-          <View style={styles.bannerContainer}>
+          <TextInput
+            style={styles.input}
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="역명 검색 · 즐겨찾기"
+            placeholderTextColor="#999"
+            keyboardType="default"
+            onSubmitEditing={handleSearch}
+            onPress={() => router.push({
+              pathname: '/MM/searchScreen',
+              params: { onSearchComplete: saveSearchResults }
+            })}
+          />
+          <TouchableOpacity
+            style={styles.searchButton}
+            onPress={handleSearch}
+          >
             <Image
-              source={require('../../../assets/images/mainicon/광고사진.png')}
-              style={styles.bannerImage}
+              source={require('../../../assets/images/mainicon/Trailing-Elements.png')}
+              style={styles.searchIcon}
             />
-          </View>
+          </TouchableOpacity>
         </View>
 
-        {/* 좌측 슬라이드 메뉴 */}
-        {isModalVisible && (
-          <TouchableWithoutFeedback onPress={closeMenu}>
-            <View style={styles.overlay}>
-              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-                <Animated.View
-                  style={[
-                    styles.modalMenu,
-                    { transform: [{ translateX: slideAnim }] },
-                  ]}
-                >
-                  <View style={styles.modalHeader}>
-                    <Image
-                      source={require('../../../assets/images/mainicon/KakaoTalk_20241113_171601246.png')}
-                      style={styles.modalLogo}
-                    />
-                  </View>
-                  <View style={styles.modalItems}>
-                    {!isLoggedIn ? (
-                      // 로그인하지 않은 경우
-                      <TouchableOpacity
-                        style={styles.menuItem}
-                        onPress={() => handleMenuNavigation('login')}
-                      >
-                        <Image
-                          source={require('../../../assets/images/mainicon/로그인 아이콘.png')}
-                          style={styles.icon}
-                        />
-                        <Text style={styles.menuText}>로그인</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      // 로그인한 경우
-                      <>
-                        <View style={styles.userInfo}>
-                          <Text style={styles.emailText}>{userEmail}</Text>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.menuItem}
-                          onPress={handleLogout}
-                        >
-                          <Text style={styles.menuText}>로그아웃</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                    
+        {/* 중앙 지하철 이미지 */}
+        <ReactNativeZoomableView style={styles.mapContainer}>
+          <SubwayMap
+            popupPosition={popupPosition}
+            popupVisible={popupVisible}
+            setPopupVisible={setPopupVisible}
+            setPopupPosition={setPopupPosition}
+            selectedStation={selectedStation}
+          />
+        </ReactNativeZoomableView>
+
+        {/* 검색 아이콘 */}
+        <TouchableOpacity
+          style={styles.searchIconContainer}
+          onPress={handleSearchIconClick}
+        >
+          <Image
+            source={require('../../../assets/images/mainicon/search.png')}
+            style={styles.floatingSearchIcon}
+          />
+        </TouchableOpacity>
+
+        {/* 하단 광고 배너 */}
+        <View style={styles.bannerContainer}>
+          <Image
+            source={require('../../../assets/images/mainicon/광고사진.png')}
+            style={styles.bannerImage}
+          />
+        </View>
+      </View>
+
+      {/* 좌측 슬라이드 메뉴 */}
+      {isModalVisible && (
+        <TouchableWithoutFeedback onPress={closeMenu}>
+          <View style={styles.overlay}>
+            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+              <Animated.View
+                style={[
+                  styles.modalMenu,
+                  { transform: [{ translateX: slideAnim }] },
+                ]}
+              >
+                <View style={styles.modalHeader}>
+                  <Image
+                    source={require('../../../assets/images/mainicon/KakaoTalk_20241113_171601246.png')}
+                    style={styles.modalLogo}
+                  />
+                </View>
+                <View style={styles.modalItems}>
+                  {!isLoggedIn ? (
+                    // 로그인하지 않은 경우
                     <TouchableOpacity
                       style={styles.menuItem}
-                      onPress={() => handleMenuNavigation('favorite')}
+                      onPress={() => handleMenuNavigation('login')}
                     >
                       <Image
-                        source={require('../../../assets/images/mainicon/즐겨찾기 아이콘.png')}
+                        source={require('../../../assets/images/mainicon/로그인 아이콘.png')}
                         style={styles.icon}
                       />
-                      <Text style={styles.menuText}>즐겨찾기</Text>
+                      <Text style={styles.menuText}>로그인</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.menuItem}
-                      onPress={() => handleMenuNavigation('terms')}
-                    >
-                     <Image
-                        source={require('../../../assets/images/mainicon/이용약관 아이콘.png')}
+                  ) : (
+                    // 로그인한 경우
+                    <>
+                      <View style={styles.userInfo}>
+                        <Text style={styles.emailText}>사용자 계정: {userEmail}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={handleLogout}
+                      >
+                        <Image
+                        source={require('../../../assets/images/mainicon/로그인 아이콘.png')}
                         style={styles.icon}
-                        /> 
-                      <Text style={styles.menuText}>이용약관</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.menuItem}
-                      onPress={() => handleMenuNavigation('settings')}
-                    >
-                      <Image
-                        source={require('../../../assets/images/mainicon/설정 아이콘.png')}
-                        style={styles.icon}
-                        />
-                      <Text style={styles.menuText}>설정</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <TouchableOpacity style={styles.closeButton} onPress={closeMenu}>
-                    <Text style={styles.closeButtonText}>←</Text>
+                      />
+                        <Text style={styles.menuText}>로그아웃</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => handleMenuNavigation('favorite')}
+                  >
+                    <Image
+                      source={require('../../../assets/images/mainicon/즐겨찾기 아이콘.png')}
+                      style={styles.icon}
+                    />
+                    <Text style={styles.menuText}>즐겨찾기</Text>
                   </TouchableOpacity>
-                </Animated.View>
-              </TouchableWithoutFeedback>
-            </View>
-          </TouchableWithoutFeedback>
-        )}
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => handleMenuNavigation('terms')}
+                  >
+                    <Image
+                      source={require('../../../assets/images/mainicon/이용약관 아이콘.png')}
+                      style={styles.icon}
+                    />
+                    <Text style={styles.menuText}>이용약관</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => handleMenuNavigation('settings')}
+                  >
+                    <Image
+                      source={require('../../../assets/images/mainicon/설정 아이콘.png')}
+                      style={styles.icon}
+                    />
+                    <Text style={styles.menuText}>설정</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity style={styles.closeButton} onPress={closeMenu}>
+                  <Text style={styles.closeButtonText}>←</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      )}
     </View>
   );
 };
@@ -376,7 +381,7 @@ const styles = StyleSheet.create({
   modalLogo: {
     width: 100, // 로고 크기
     height: 100,
-    resizeMode: 'contain', // 이미지 비율 지
+    resizeMode: 'contain', // 이미지 비 지
   },
   modalItems: {
     marginTop: 20,
@@ -388,10 +393,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 15,
     backgroundColor: 'white',
+    justifyContent: 'center',
   },
-  menuText:{
+  menuText: {
     fontSize: 18,
     color: '#333333',
+    textAlign: 'center',
+    flex: 1,
   },
   closeButton: {
     position: 'absolute',
@@ -425,14 +433,24 @@ const styles = StyleSheet.create({
     marginRight: 20,
   },
   overlay: {
-  position: 'absolute',
-  top: 0,
-  bottom: 0,
-  left: 0,
-  right: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.5)', // 반투명 배경
-  zIndex: 999, 
-  }
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // 반투명 배경
+    zIndex: 999,
+  },
+  userInfo: {
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 10,
+  },
+  emailText: {
+    fontSize: 16,
+    color: '#333333',
+    textAlign: 'center',
+  },
 });
 
 export default MainScreen;

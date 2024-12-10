@@ -16,10 +16,10 @@ export default function Login() {
   const handleLogin = async () => {
     try {
       console.log("로그인 시도:", { email, password }); // 디버깅용
-
+      
       const response = await apiClient.post("/api/auth/login", {
         email: email,
-        passwd: password
+        passwd: password,
       });
 
       console.log("서버 응답:", response.data); // 디버깅용

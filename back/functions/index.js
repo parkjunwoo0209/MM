@@ -1,7 +1,16 @@
 const express = require("express");
 const cors = require("cors");
+const admin = require('firebase-admin');
 const routes = require("./routes");
 const app = express();
+
+// Firebase Admin SDK 초기화
+if (!admin.apps.length) {
+  admin.initializeApp({
+    // 여기에 Firebase 프로젝트 설정을 추가
+    // credential: admin.credential.applicationDefault()
+  });
+}
 
 app.use(cors());
 app.use(express.json());

@@ -4,6 +4,7 @@ import { Platform, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/hooks/ThemeContext';
+import { Alert } from 'react-native';
 import {
   View,
   TextInput,
@@ -187,7 +188,7 @@ const SearchResult = () => {
       setDepartureStation(tempArrival);
       setArrivalStation(tempDeparture);
 
-      // API 호출 경로 수정
+      // API 호출 경로
       const response = await apiClient.get(`/api/routes/connections`, {
         params: {
           startStation: tempArrival,  // 교환된 출발역
@@ -213,23 +214,23 @@ const SearchResult = () => {
         Alert.alert("알림", "로그인이 필요한 기능입니다.");
         return;
       }
-
-      // 해당 경로 찾기
+  
       const route = mockData.find(item => item.id === id);
       if (!route) return;
-
-      // 필요한 기본 정보만 전송
+  
       const routeData = {
         departure: route.steps[0].station,
         arrival: route.steps[route.steps.length - 1].station,
         type: route.type,
         time: route.time,
-        cost: route.cost
+        cost: route.cost,
       };
-
+      
+      console.log("Email:", userEmail);
+      console.log('route:', routeData);
       if (!route.isFavorite) {
         await apiClient.post("/api/favorites/route/add", {
-          email: userEmail,
+          email: userEmail,    // 이메일 포함
           routeData: routeData
         });
       } else {
@@ -238,24 +239,25 @@ const SearchResult = () => {
           routeId: id
         });
       }
-
-      // UI 업데이트
+  
       setMockData((prevData) =>
         prevData.map((item) =>
           item.id === id ? { ...item, isFavorite: !item.isFavorite } : item
         )
       );
-
+  
       Alert.alert(
-        "알림", 
+        "알림",
         route.isFavorite ? "즐겨찾기가 해제되었습니다." : "즐겨찾기에 추가되었습니다."
       );
-
     } catch (error) {
       console.error('즐겨찾기 처리 중 오류:', error);
       Alert.alert('오류', '즐겨찾기 처리에 실패했습니다.');
     }
   };
+  
+  
+  
 
   // 출발역 초기화
   const clearDeparture = () => setDepartureStation('');
@@ -276,7 +278,7 @@ const SearchResult = () => {
       
       // 옵션과 일치하는 타입을 맨 위로 올리기 위한 정렬
       return newData.sort((a, b) => {
-        // 옵션과 일치하는 타입을 맨 ��로
+        // 옵션과 일치하는 타입을 맨   로
         if (option === '최소 비용순') {
           if (a.type === '최소 비용') return -1;
           if (b.type === '최소 비용') return 1;
@@ -406,80 +408,107 @@ const SearchResult = () => {
   // 결과 카드 렌더링
   const renderResult = ({ item }) => (
     <View style={styles.resultCard}>
+      {/* 전체 카드를 터치 가능한 영역으로 만듦 */}
       <TouchableOpacity 
-        style={styles.cardHeader}
-        onPress={() => toggleCard(item.id)}
+        style={styles.cardContent}
+        onPress={async () => {
+          try {
+            await AsyncStorage.setItem('selectedRoute', JSON.stringify({
+              path: item.steps.map(step => step.station),
+              totalTime: item.time,
+              totalCost: item.cost,
+              type: item.type,
+              steps: item.steps
+            }));
+            router.push('/MM/MainScreen');
+          } catch (error) {
+            console.error('경로 저장 중 오류:', error);
+            Alert.alert('오류', '경로 선택 중 문제가 발생했습니다.');
+          }
+        }}
       >
+        {/* 카드 헤더 */}
         <View style={styles.header}>
           <View style={styles.timeContainer}>
-            <Text style={styles.label}>{item.type}</Text>
+            <Text style={styles.routeType}>{item.type}</Text>
             <Text style={styles.time}>{item.time}</Text>
+            <Text style={styles.details}>{item.cost}</Text>
           </View>
-          <Text style={styles.details}>
-            {item.cost}
-          </Text>
-          <TouchableOpacity onPress={() => toggleFavorite(item.id)} style={styles.bookmark}>
-            <Image
+          {/* 즐겨찾기 버튼은 별도의 TouchableOpacity로 분리 */}
+          <TouchableOpacity 
+            onPress={(e) => {
+              e.stopPropagation(); // 상위 터치 이벤트 전파 방지
+              toggleFavorite(item.id);
+            }}
+          >
+            <Image 
               source={item.isFavorite ? StarIcon : EmptyStarIcon}
               style={styles.icon}
             />
-            <Text style={styles.bookmarkText}>즐겨찾기</Text>
           </TouchableOpacity>
         </View>
 
-        {/* 시작역과 도착역 정보 */}
-        <View style={styles.summaryContainer}>
-          <Text style={styles.summaryText}>
-            {item.steps[0].station} → {item.steps[item.steps.length - 1].station}
-          </Text>
-          <Image
-            source={expandedCards.has(item.id) ? 
-              require('../../../assets/images/searchicon/arrow_up.png') :
-              require('../../../assets/images/searchicon/arrow_down.png')}
-            style={styles.arrowIcon}
-          />
-        </View>
+        {/* 그래프 영역 */}
+        {renderGraph(item.steps)}
       </TouchableOpacity>
 
-      {/* 펼쳐졌을 때만 보이는 상세 정보 */}
-      {expandedCards.has(item.id) && (
-        <>
-          {renderGraph(item.steps)}
-          <View style={styles.steps}>
-            {item.steps.map((step, index) => {
-              const color = stepColors[step.type] || defaultColor;
-              const borderColor = stepBorderColors[step.type] || defaultColor;
+      {/* 펼치기/접기 버튼은 별도로 분리 */}
+      <TouchableOpacity 
+        style={styles.expandButton}
+        onPress={(e) => {
+          e.stopPropagation(); // 상위 터치 이벤트 전파 방지
+          toggleCard(item.id);
+        }}
+      >
+        <Image 
+          source={ArrowDropDownIcon} 
+          style={[
+            styles.arrowIcon, 
+            expandedCards.has(item.id) && styles.arrowIconRotated
+          ]} 
+        />
+      </TouchableOpacity>
 
-              return (
-                <View key={index} style={styles.stepContainer}>
-                  <View style={styles.step}>
-                    <View
-                      style={[
-                        styles.commonCircle,
-                        styles.circle,
-                        { backgroundColor: color, borderColor: borderColor },
-                      ]}
-                    >
-                      <Text style={styles.circleText}>{step.type}</Text>
-                    </View>
-                    <View style={styles.stepTextContainer}>
-                      <View style={styles.stepStationContainer}>
-                        <Text style={styles.stepStation}>
-                          {step.station} {step.type}
-                        </Text>
-                        <Text style={styles.lineInfo}>
-                          {step.line}호선
-                        </Text>
-                      </View>
-                      {step.details ? <Text style={styles.stepDetails}>{step.details}</Text> : null}
-                    </View>
+      {/* 펼쳐진 상태의 상세 정보 */}
+      {expandedCards.has(item.id) && (
+        <View style={styles.steps}>
+          {item.steps.map((step, index) => {
+            const color = stepColors[step.type] || defaultColor;
+            const borderColor = stepBorderColors[step.type] || defaultColor;
+
+            return (
+              <View key={index} style={styles.stepContainer}>
+                <View style={styles.step}>
+                  <View
+                    style={[
+                      styles.commonCircle,
+                      styles.circle,
+                      { backgroundColor: color, borderColor: borderColor },
+                    ]}
+                  >
+                    <Text style={styles.circleText}>{step.type}</Text>
                   </View>
-                  {index < item.steps.length - 1 && <View style={styles.line} />}
+                  <View style={styles.stepTextContainer}>
+                    <View style={styles.stepStationContainer}>
+                      <Text style={styles.stepStation}>
+                        {step.station} {step.type}
+                      </Text>
+                      {step.line && <Text style={styles.lineInfo}>{step.line}</Text>}
+                    </View>
+                    {step.details && (
+                      <Text style={styles.stepDetails}>
+                        {step.details}
+                      </Text>
+                    )}
+                  </View>
                 </View>
-              );
-            })}
-          </View>
-        </>
+                {index < item.steps.length - 1 && (
+                  <View style={styles.line} />
+                )}
+              </View>
+            );
+          })}
+        </View>
       )}
     </View>
   );
@@ -717,14 +746,14 @@ const styles = StyleSheet.create({
     alignItems: 'center', // 수직 중앙 정렬
     marginBottom: 10,
   },
-  // 소요 시간 컨테이
+  // 소요 시간 컨테이너 스타일
   timeContainer: { 
-    flexDirection: 'column', 
-    alignItems: 'flex-start', //왼쪽 정렬
-    justifyContent: 'center',
-    marginRight: 20, // "14분"과 환승 정보 사이 간격 정
+    flexDirection: 'row',  // column에서 row로 변경
+    alignItems: 'center',  // 중앙 정렬
+    justifyContent: 'flex-start',
+    gap: 10,  // 시간과 금액 사이 간격
   },
-  // 소요 시 텍스트 스타일
+  // 소요 시간 텍스트 스타일
   time: { 
     fontSize: 24, 
     fontWeight: '600', // 굵은 글씨
@@ -732,11 +761,9 @@ const styles = StyleSheet.create({
   },
   // 세부 정보 텍스트 스타일
   details: { 
-    fontSize: 14, 
-    color: 'rgba(0, 0, 0, 0.4)',
-    flex: 1,
-    textAlign: 'left',
-    alignSelf: 'flex-end',
+    fontSize: 20,  // 크기 증가
+    color: 'rgba(0, 0, 0, 0.6)',  // 색상 진하게 수정
+    fontWeight: '500',  // 약간의 굵기 추가
   },
   // 즐겨찾기 버튼 스타일
   bookmark: {
@@ -753,7 +780,7 @@ const styles = StyleSheet.create({
   steps: { 
     marginTop: 10 
   },
-  // 개별 스텝 컨테이너 스타일
+  // 별 스텝 컨테이너 스타일
   stepContainer: { 
     
     marginBottom: 0 
@@ -881,6 +908,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.4)',
     marginLeft: 8
+  },
+  expandButton: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+    marginTop: 10,
+  },
+  arrowIcon: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
+  },
+  arrowIconRotated: {
+    transform: [{ rotate: '180deg' }],
+  },
+  backButton: {
+    position: 'absolute',
+    left: 20,
+    bottom: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  backIcon: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
+  },
+  routeType: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  timeContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  graphTouchable: {
+    width: '100%',
+    alignItems: 'center',
+    padding: 10,
+  },
+  cardContent: {
+    width: '100%',
   },
 });
 

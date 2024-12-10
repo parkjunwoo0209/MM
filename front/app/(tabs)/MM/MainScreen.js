@@ -1,22 +1,10 @@
-import React, { useRef, useEffect } from "react";
-import { StyleSheet, View, Image, Text, FlatList, Animated, PanResponder, TouchableOpacity } from "react-native";
+import React, { useRef, useEffect, useState } from "react";
+import { Alert,StyleSheet, View, Image, Text, FlatList, Animated, PanResponder, TouchableOpacity, ScrollView } from "react-native";
 import { useTheme } from '../../../hooks/ThemeContext';
 import { useRouter } from 'expo-router';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const mockData = [
-  {
-    id: "1",
-    time: "14분",
-    transfers: 1,
-    cost: "1250원",
-    isFavorite: false,
-    steps: [
-      { type: "승차", station: "620", details: "3개 역 이동 | 621 → 622 → 601", duration: 8 },
-      { type: "환승", station: "601", details: "2개 역 이동 | 503 → 303", duration: 6 },
-      { type: "하차", station: "303", details: null, duration: 0 },
-    ],
-  },
-];
+
 
 const stepColors = {
   승차: "#FFD700",
@@ -59,7 +47,61 @@ const MainScreen = () => {
   const router = useRouter();
   const { isDarkMode } = useTheme();
   const theme = isDarkMode ? themes.dark : themes.light;
-  
+  const [routeData, setRouteData] = useState(null);
+
+  useEffect(()=> {
+    const fetchSelectedRoute = async () => {
+      try {
+        const savedRoute = await AsyncStorage.getItem('selectedRoute');
+        if (savedRoute) {
+          setRouteData(JSON.parse(savedRoute));
+        }
+      } catch (error){
+        console.error('레전드 에러 발생:', error)
+      }
+    };
+
+    fetchSelectedRoute();
+  }, []);
+// 도착 전 알림
+  const handleFloatingButtonPress = () => {
+    if (!routeData || !routeData.steps || routeData.steps.length < 2) {
+      Alert.alert("알림", "유효한 경로 데이터가 없습니다.");
+      return;
+    }
+
+    try {
+      // 도착 전 역과 소요 시간 계산
+      const preFinalStation = routeData.steps[routeData.steps.length - 2];
+      const totalTime = routeData.steps.reduce((acc, step) => acc + step.duration, 0);
+      const preFinalTime = routeData.steps.slice(0, -1).reduce((acc, step) => acc + step.duration, 0);
+
+      const timeUntilAlert = preFinalTime / 60 - 1; // 초 단위를 분 단위로 변환
+
+      if (timeUntilAlert <= 0) {
+        Alert.alert("알림", "도착 시간이 너무 짧아 알림을 설정할 수 없습니다.");
+        return;
+      }
+      
+      // 도착 전 알림 예약
+      setTimeout(() => {
+        Alert.alert(
+          "알림",
+          `${preFinalStation.station}역에 곧 도착합니다!`
+        );
+      }, timeUntilAlert * 60 * 1000); // 분 단위를 밀리초로 변환
+
+      Alert.alert(
+        "알림",
+        `${timeUntilAlert.toFixed(1)}분 뒤에 알림이 울립니다.`
+      );
+
+      console.log(`알림 설정됨: ${timeUntilAlert}분 후`);
+    } catch (error) {
+      console.error("알림 처리 중 오류:", error.message);
+    }
+  };
+
   const slideAnim = useRef(new Animated.Value(500)).current;
   const MIN_TRANSLATE_Y = 350; // 드래그 핸들이 보이도록 최소 높이 설정
   useEffect(() => {
@@ -112,9 +154,9 @@ const MainScreen = () => {
       <View style={[styles.graphContainer, { backgroundColor: theme.card }]}>
         <View style={styles.graph}>
           {steps.map((step, index) => {
-            const segmentWidth = (step.duration / totalDuration) * graphWidth;
-            const circlePosition = cumulativeWidth;
-            cumulativeWidth += segmentWidth;
+            const segmentWidth = (step.duration / totalDuration) * graphWidth;// 단계 비율에 따른 길이
+            const circlePosition = cumulativeWidth;// 현재 단계의 시작 위치
+            cumulativeWidth += segmentWidth;// 누적 길이 갱신
 
             const nextStep = steps[index + 1];
             const color = stepColors[step.type] || defaultColor;
@@ -159,7 +201,7 @@ const MainScreen = () => {
           </Text>
         </View>
       </View>
-      {renderGraph(item.steps)}
+      {renderGraph(routeData.steps)}
       <View style={styles.steps}>
         {item.steps.map((step, index) => {
           const color = stepColors[step.type] || defaultColor;
@@ -193,7 +235,7 @@ const MainScreen = () => {
                   )}
                 </View>
               </View>
-              {index < item.steps.length - 1 && (
+              {index < routeData.steps.length - 1 && (
                 <View style={[styles.line, { borderColor: theme.border }]} />
               )}
             </View>
@@ -228,15 +270,58 @@ const MainScreen = () => {
         {...panResponder.panHandlers}
       >
         <View style={[styles.dragHandle, { backgroundColor: theme.dragHandle }]} />
-        <FlatList
-          data={mockData}
-          keyExtractor={(item) => item.id}
-          renderItem={renderResult}
-          contentContainerStyle={[styles.list, { backgroundColor: theme.background }]}
-        />
+        
+        
+        {routeData ? (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={[styles.resultCard]}>
+          <View style={styles.header}>
+            <View style={styles.timeContainer}>
+              <Text style={[styles.time, { color: theme.text }]}>{routeData.totalTime}</Text>
+              <Text style={[styles.details, { color: theme.subText }]}>
+                비용: {routeData.totalCost} | 유형:  {routeData.type}
+              </Text>
+            </View>
+          </View>
+          {renderGraph(routeData.steps)}
+          <View style={styles.steps}>
+            {routeData.steps.map((step, index) => {
+              const color = stepColors[step.type] || defaultColor;
+              const borderColor = stepBorderColors[step.type] || defaultColor;
+
+              return (
+                <View key={index} style={styles.stepContainer}>
+                  <View style={styles.step}>
+                    <View
+                      style={[
+                        styles.commonCircle,
+                        styles.circle,
+                        { backgroundColor: color, borderColor: borderColor },
+                      ]}
+                    >
+                      <Text style={styles.circleText}>{step.type}</Text>
+                    </View>
+                    <View style={styles.stepTextContainer}>
+                      <Text style={styles.stepStation}>
+                        {step.station} {step.type}
+                      </Text>
+                      {step.details && <Text style={styles.stepDetails}>{step.details}</Text>}
+                    </View>
+                  </View>
+                  {index < routeData.steps.length - 1 && <View style={styles.line} />}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+        </ScrollView>
+      ) : (
+        <Text style={{ textAlign: 'center', marginTop: 20, color: theme.text }}>Loading...</Text>
+      )}
+
         <TouchableOpacity 
           style={[styles.floatingButton, { backgroundColor: theme.floatingButton }]} 
-          onPress={() => console.log("Button Pressed")}
+          onPress={handleFloatingButtonPress}
         >
           <Image 
             source={require("../../../assets/images/menuicon/directions_subway.png")} 

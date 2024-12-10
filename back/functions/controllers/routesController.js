@@ -1,3 +1,4 @@
+
 const routesService = require("../services/routesService");
 
 // 최적 경로 검색 및 사용자 선택
@@ -83,6 +84,28 @@ exports.getConnections = async (req, res) => {
     console.log("총 비용:", result.costOptimized.totalCost);
     console.log("노선:", result.costOptimized.lines);
     
+    res.json(result);
+  } catch (error) {
+    console.error("경로 검색 오류:", error);
+    res.status(400).json({ error: error.message });
+  }
+};
+
+// searchRoute 컨트롤러 추가
+exports.searchRoute = async (req, res) => {
+  try {
+    const { start, end } = req.query;
+    
+    if (!start || !end) {
+      throw new Error("출발역과 도착역이 모두 필요합니다.");
+    }
+
+    const result = await routesService.findConnections(start, end);
+    
+    if (!result) {
+      throw new Error("경로를 찾을 수 없습니다.");
+    }
+
     res.json(result);
   } catch (error) {
     console.error("경로 검색 오류:", error);

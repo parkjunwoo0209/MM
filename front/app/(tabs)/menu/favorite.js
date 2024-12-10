@@ -18,14 +18,25 @@ export default function BookMark() {
         console.error("로그인된 사용자가 없습니다.");
         return;
       }
-
-      const response = await apiClient.get(`/api/favorites/${userEmail}`);
-      const favoritesData = response.data.map(item => ({
+      //역 즐겨찾기 가져오기
+      const stationResponse = await apiClient.get(`/api/favorites/${userEmail}`);
+      const stationFavorites = stationResponse.data.map(item => ({
         id: item.favoriteText, // 역 ID를 고유 식별자로 사용
         station: item.favoriteText // 역 이름으로 표시
       }));
 
-      setData(favoritesData);
+      
+      //경로 즐겨찾기 가져오기
+      const routeResponse = await apiClient.get(`/api/favorites/route/${userEmail}`);
+      const routeFavorites = routeResponse.data.map(item => ({
+        id: item.id, // 경로 ID
+        departure: item.departure, // 출발역
+        arrival: item.arrival, // 도착역
+        time: item.time, // 소요 시간
+        cost: item.cost, // 비용
+        type: item.type // 경로 유형
+      }));
+      setData([...stationFavorites, ...routeFavorites]);
     } catch (error) {
       console.error("즐겨찾기 데이터 로드 중 오류:", error.message);
     }
@@ -38,15 +49,16 @@ export default function BookMark() {
     }, [])
   );
 
-  // 즐겨찾기 삭제
-  const handleRemoveItem = async (stationId) => {
+
+// 즐겨찾기 삭제
+  const handleRemoveRouteItem = async (routeId) => {
     try {
       const userEmail = await AsyncStorage.getItem('userEmail');
       if (!userEmail) {
         console.error("로그인된 사용자가 없습니다.");
         return;
       }
-
+  
       // 삭제 전 사용자 확인
       Alert.alert(
         "즐겨찾기 삭제",
@@ -60,13 +72,13 @@ export default function BookMark() {
             text: "삭제",
             onPress: async () => {
               try {
-                await apiClient.post("/api/favorites/remove", {
+                await apiClient.post("/api/favorites/route/remove", {
                   email: userEmail,
-                  favoriteText: stationId
+                  routeId: routeId
                 });
                 
                 // 성공적으로 삭제되면 로컬 상태 업데이트
-                setData((prevData) => prevData.filter((item) => item.id !== stationId));
+                setData((prevData) => prevData.filter((item) => item.id !== routeId));
                 
                 // 삭제 완료 메시지
                 Alert.alert("알림", "즐겨찾기가 삭제되었습니다.");
@@ -85,22 +97,52 @@ export default function BookMark() {
     }
   };
 
+
   // 각 리스트 항목 렌더링
-  const renderItem = ({ item }) => (
-    <View style={styles.itemContainer}>
-      <Image
-        source={require("../../../assets/images/menuicon/location_on.png")}
-        style={styles.icon}
-      />
-      <Text style={styles.label}>{item.station}</Text>
-      <TouchableOpacity onPress={() => handleRemoveItem(item.id)} style={{ padding: 10 }}>
-        <Image
-          source={require("../../../assets/images/menuicon/star_filled.png")}
-          style={styles.bookmarkIcon}
-        />
-      </TouchableOpacity>
-    </View>
-  );
+  const renderItem = ({ item }) => {
+    if (item.station) {
+      // 역 즐겨찾기 렌더링
+      return (
+        <View style={styles.itemContainer}>
+          <Image
+            source={require("../../../assets/images/menuicon/location_on.png")}
+            style={styles.icon}
+          />
+          <Text style={styles.label}>{item.station}</Text>
+          <TouchableOpacity onPress={() => handleRemoveItem(item.id)} style={{ padding: 10 }}>
+            <Image
+              source={require("../../../assets/images/menuicon/star_filled.png")}
+              style={styles.bookmarkIcon}
+            />
+          </TouchableOpacity>
+        </View>
+      );
+    } else {
+      // 경로 즐겨찾기 렌더링
+      return (
+        <View style={styles.itemContainer}>
+          <Image
+            source={require("../../../assets/images/menuicon/directions_subway.png")}
+            style={styles.icon}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>
+              {item.departure} → {item.arrival}
+            </Text>
+            <Text style={styles.subLabel}>
+              {item.time} | {item.cost} | {item.type}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => handleRemoveRouteItem(item.id)} style={{ padding: 10 }}>
+            <Image
+              source={require("../../../assets/images/menuicon/star_filled.png")}
+              style={styles.bookmarkIcon}
+            />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>

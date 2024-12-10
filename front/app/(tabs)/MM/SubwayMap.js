@@ -24,6 +24,35 @@ const SubwayMap = ({
     setPopupPosition({ top, left, station: stationId });
   };
 
+  //자동 즐겨찾기를 위한 출발 도착 count하는 함수
+  const checkRoute = async (departure, arrival) => {
+    try {
+      const userEmail = await AsyncStorage.getItem('userEmail');
+      if (!userEmail) {
+        Alert.alert("알림", "로그인이 필요한 기능입니다.");
+        return;
+      }
+      const response = await apiClient.post("/api/routes/check", {
+        email: userEmail,
+        departure,
+        arrival,
+      });
+      
+      if (response.data.message) {
+        Alert.alert("알림", response.data.message);
+      }
+  
+      console.log("Route check completed:", response.data);
+  
+      if (response.data.message) {
+        Alert.alert("알림", response.data.message); // 자동 즐겨찾기 등록 알림
+      }
+    } catch (error) {
+      console.error("경로 체크 중 오류:", error.message);
+    }
+  };
+  
+
   // 팝업 함수
   const handlePopupOption = async (type) => {
     if (type === '출발') {
@@ -42,16 +71,18 @@ const SubwayMap = ({
         }
         
         const newState = { ...prev, arrival: popupPosition.station };
-        
+
         if (newState.departure && newState.arrival) {
+          checkRoute(newState.departure, newState.arrival);
+           
           apiClient.get(`/api/routes/connections`, {
             params: {
               startStation: newState.departure,
               endStation: newState.arrival
-            }
-          })
+            },
+            })
           .then(response => {
-            console.log("API 응답 데이터 구조:", response.data);
+
 
             router.push({
               pathname: '/MM/searchResult',
@@ -201,7 +232,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 35,
     height: 35,
-    backgroundColor: 'rgba(0, 0, 255, 0.5)',
     borderRadius: 15,
   },
   popup: {
